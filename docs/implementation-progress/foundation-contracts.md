@@ -25,8 +25,8 @@
 | 5. SelfRequestAssembler 与确定性预算 | 已完成 | `0bf0229`, `5802514` | 13/13 测试通过；typecheck exit 0 | 修复后 Approved | 可变上下文深层隔离，opaque evidence 保持 identity |
 | 6. ExecutionVerifier | 已完成 | `01bce4f`, `344e0a0` | 29/29 测试通过；typecheck exit 0 | 安全修复后 Approved | 重复/冲突 operation 与 candidate 全部 fail closed |
 | 7. 内存版 TurnService 垂直切片 | 已完成 | `45307eb`, `99454ce`, `4602060`, `a46e125` | 74/74 测试通过；typecheck/diff-check exit 0 | 多轮硬化后 Approved | trusted validator、single-flight、token checkpoint、provenance、bounded LRU |
-| 8. 验证证据、README 与最终检查 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 全分支审查 | 待开始 | — | — | — | — |
+| 8. 验证证据、README 与最终检查 | 已完成 | `665b82a`, `509d2d4` | Node 24.16.0；74/74 测试；typecheck exit 0；Core 扫描无匹配 | 修复后 Approved | 验收命令已改为可复制 PowerShell |
+| 全分支审查 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 
 ## 提交与审查流水
 
@@ -53,10 +53,13 @@
 | 2026-08-09 | 任务 7 生命周期硬化 | `4602060` | 引入 bounded LRU、Store 签发 token 与逐出后 replay guards |
 | 2026-08-09 | 任务 7 缓存顺序硬化 | `a46e125` | 校验容量并将 fingerprint/cache/store guards 前置到 factory |
 | 2026-08-09 | 任务 7 最终复审 | `a66cfb0..a46e125` | Approved；无 Critical/Important 遗留 |
+| 2026-08-09 | 任务 8 验收文档 | `665b82a` | 新增 README 与 Phase 1 验证记录 |
+| 2026-08-09 | 任务 8 可复现性修复 | `509d2d4` | 修正 Core 扫描与 Windows PowerShell 实际命令 |
+| 2026-08-09 | 任务 8 最终复审 | `d5f86ef..509d2d4` | Approved；无 Critical/Important/Minor 遗留 |
 
 ## 遗留事项
 
-- 本机直接执行 `node --version` 为 24.16.0，但 `pnpm.cmd` 报告其宿主 Node 为 24.14.0；当前验证通过，最终验收前继续调查并争取消除该环境警告。
+- Codex 默认 `pnpm.cmd` wrapper 使用 Node 24.14.0；最终验收已改用系统 Node 24.16.0 驱动同一 pnpm 11.16.0 入口，取得无 engine warning 的正式证据。
 - Task 1 按 TypeScript 7.0.2 兼容性要求移除了已废弃的 `baseUrl`，并将四个 `paths` 目标改为等价相对路径；任务审查确认合理。
 - Codex fallback `pnpm.cmd` 未给 arbitrary command 自动注入 workspace `.bin`；聚焦验证暂通过进程级 PATH 前置执行，根 `pnpm test`/`pnpm typecheck` 不受影响。
 - Task 4 Minor：`TaskContextBuilder` 的防御性复制测试目前只主动变更 `relevantFacts`，最终全分支审查时决定是否补齐 `artifacts` 与 `constraints` 的对称断言。
