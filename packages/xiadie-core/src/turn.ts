@@ -1,13 +1,18 @@
 import type { CapabilityAwareness, CompiledPersona, MemoryRecord, RelationshipState, SelfState } from "./context.js";
 import type { TurnId } from "./ids.js";
 
+declare const executionEvidenceBrand: unique symbol;
+declare const verifiedExecutionReportBrand: unique symbol;
+
 export interface ExecutionEvidence {
+  readonly [executionEvidenceBrand]: true;
   id: string;
   operationId: string;
   summary: string;
 }
 
 export interface VerifiedExecutionReport {
+  readonly [verifiedExecutionReportBrand]: true;
   runId: string;
   status: "success" | "partial" | "failed";
   evidence: ExecutionEvidence[];
