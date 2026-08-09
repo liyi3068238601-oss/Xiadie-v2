@@ -20,8 +20,8 @@
 | --- | --- | --- | --- | --- | --- |
 | 1. TypeScript 工作区与质量门禁 | 已完成 | `46232e2` | 1/1 测试通过；typecheck exit 0 | Approved | TypeScript 7 路径映射兼容修正已审查通过 |
 | 2. Core ID、上下文与 Turn 契约 | 已完成 | `1e02a3b`, `41ff80b` | 聚焦测试 1/1 通过；typecheck exit 0 | 修复后 Approved | Verified facts 增加 opaque brand |
-| 3. SelfRuntime / AgentRuntime 契约与事件 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 4. DelegateValidator 与上下文防火墙 | 待开始 | — | — | — | — |
+| 3. SelfRuntime / AgentRuntime 契约与事件 | 已完成 | `c34af6f` | 4/4 测试通过；typecheck exit 0 | Approved | 运行级序列校验归 Task 6/7 |
+| 4. DelegateValidator 与上下文防火墙 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 | 5. SelfRequestAssembler 与确定性预算 | 待开始 | — | — | — | — |
 | 6. ExecutionVerifier | 待开始 | — | — | — | — |
 | 7. 内存版 TurnService 垂直切片 | 待开始 | — | — | — | — |
@@ -38,6 +38,8 @@
 | 2026-08-09 | 任务 2 实现 | `1e02a3b` | 建立 Core ID、上下文分区、SelfRequest 与 Turn 事实契约 |
 | 2026-08-09 | 任务 2 审查修复 | `41ff80b` | 以非导出 unique-symbol 品牌封闭 Verified facts 的普通结构化构造 |
 | 2026-08-09 | 任务 2 复审 | `77946ac..41ff80b` | 规格符合、质量 Approved；无遗留问题 |
+| 2026-08-09 | 任务 3 实现 | `c34af6f` | 建立 Self/Agent 分离的封闭事件与最小 AgentTask 契约 |
+| 2026-08-09 | 任务 3 审查 | `31a7e76..c34af6f` | 校准任务边界后 Approved；序列不变量由 Task 6/7 实现 |
 
 ## 遗留事项
 
