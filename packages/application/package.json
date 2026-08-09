@@ -1,1 +1,13 @@
-{ "name": "@xiadie/application", "version": "0.0.0", "private": true, "type": "module", "exports": "./src/index.ts", "dependencies": { "@xiadie/xiadie-core": "workspace:*", "@xiadie/self-runtime": "workspace:*", "@xiadie/agent-runtime": "workspace:*" } }
+{
+  "name": "@xiadie/application",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@xiadie/xiadie-core": "workspace:*",
+    "@xiadie/self-runtime": "workspace:*",
+    "@xiadie/agent-runtime": "workspace:*",
+    "zod": "4.4.3"
+  }
+}
