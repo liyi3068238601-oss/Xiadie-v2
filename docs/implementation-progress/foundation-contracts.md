@@ -22,8 +22,8 @@
 | 2. Core ID、上下文与 Turn 契约 | 已完成 | `1e02a3b`, `41ff80b` | 聚焦测试 1/1 通过；typecheck exit 0 | 修复后 Approved | Verified facts 增加 opaque brand |
 | 3. SelfRuntime / AgentRuntime 契约与事件 | 已完成 | `c34af6f` | 4/4 测试通过；typecheck exit 0 | Approved | 运行级序列校验归 Task 6/7 |
 | 4. DelegateValidator 与上下文防火墙 | 已完成 | `91ab523` | 9/9 测试通过；typecheck exit 0 | Approved | Zod 4.4.3 精确锁定 |
-| 5. SelfRequestAssembler 与确定性预算 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 6. ExecutionVerifier | 待开始 | — | — | — | — |
+| 5. SelfRequestAssembler 与确定性预算 | 已完成 | `0bf0229`, `5802514` | 13/13 测试通过；typecheck exit 0 | 修复后 Approved | 可变上下文深层隔离，opaque evidence 保持 identity |
+| 6. ExecutionVerifier | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 | 7. 内存版 TurnService 垂直切片 | 待开始 | — | — | — | — |
 | 8. 验证证据、README 与最终检查 | 待开始 | — | — | — | — |
 | 全分支审查 | 待开始 | — | — | — | — |
@@ -42,6 +42,9 @@
 | 2026-08-09 | 任务 3 审查 | `31a7e76..c34af6f` | 校准任务边界后 Approved；序列不变量由 Task 6/7 实现 |
 | 2026-08-09 | 任务 4 实现 | `91ab523` | 完成 strict schema、策略白名单与最小 AgentTask 转换 |
 | 2026-08-09 | 任务 4 审查 | `ef8f71d..91ab523` | 安全边界 Approved；无 Critical/Important 问题 |
+| 2026-08-09 | 任务 5 实现 | `0bf0229` | 完成 SelfRequest 分区组装与确定性预算 |
+| 2026-08-09 | 任务 5 审查修复 | `5802514` | 隔离全部可变上下文；测试 fixture 与生产 verified 边界分离 |
+| 2026-08-09 | 任务 5 复审 | `37371e2..5802514` | Approved；无 Critical/Important 问题 |
 
 ## 遗留事项
 
