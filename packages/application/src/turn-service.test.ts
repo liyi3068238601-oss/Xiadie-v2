@@ -22,7 +22,6 @@ import {
   InMemoryCheckpointStore,
   InMemoryConversationStore,
   TurnService,
-  validateDelegate,
   type ConversationStore,
 } from "./index.js";
 
@@ -172,6 +171,16 @@ class RecordingAgent implements AgentRuntime {
   }
 }
 
+const deferred = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
 class RecordingConversationStore implements ConversationStore {
   readonly attempts: VerifiedTurnRecord[] = [];
   private readonly inner = new InMemoryConversationStore();
@@ -187,6 +196,11 @@ interface ServiceOptions {
   agent?: AgentRuntime;
   conversations?: ConversationStore;
   checkpoints?: InMemoryCheckpointStore;
+  createInitialRequest?: (id: TurnId, userMessage: string) => SelfRequest;
+  createFollowupRequest?: (
+    request: SelfRequest,
+    evidence: SelfRequest["evidence"],
+  ) => SelfRequest;
 }
 
 const createService = ({
@@ -194,15 +208,16 @@ const createService = ({
   agent = new RecordingAgent(),
   conversations = new RecordingConversationStore(),
   checkpoints = new InMemoryCheckpointStore(),
+  createInitialRequest = (id, userMessage) => createRequest(id, userMessage),
+  createFollowupRequest = (request, evidence) => ({ ...request, evidence }),
 }: ServiceOptions) => ({
   service: new TurnService({
     self,
     agent,
     policy,
-    validate: validateDelegate,
     createTurnId: () => turnId,
-    createInitialRequest: (id, userMessage) => createRequest(id, userMessage),
-    createFollowupRequest: (request, evidence) => ({ ...request, evidence }),
+    createInitialRequest,
+    createFollowupRequest,
     build,
     conversations,
     checkpoints,
@@ -224,6 +239,7 @@ describe("TurnService", () => {
 
     expect(result.finalResponse).toBe("direct answer");
     expect(result.committed.turnId).toBe(turnId);
+    expect(result.committed.finalResponseId).toBe("self-event-2");
     expect(result.committed.executions).toEqual([]);
     expect((setup.agent as RecordingAgent).tasks).toEqual([]);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
@@ -231,17 +247,118 @@ describe("TurnService", () => {
     expect(self.requests[0]?.turnId).toBe(turnId);
   });
 
+  it("rejects an initial request that replaces the user message", async () => {
+    const self = new ScriptedSelf([[started(), final("forged answer")]]);
+    const setup = createService({
+      self,
+      createInitialRequest: (id) => createRequest(id, "forged input"),
+    });
+
+    await expect(
+      setup.service.run({
+        conversationId: "conversation-1",
+        userMessage: "original input",
+      }),
+    ).rejects.toThrowError("initial_request_provenance_invalid");
+
+    expect(self.requests).toEqual([]);
+    expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
+  });
+
+  it("single-flights concurrent calls for the same turn input", async () => {
+    const runGate = deferred<RuntimeRunRecord>();
+    const agentStarted = deferred<void>();
+    const agent = new RecordingAgent(async () => {
+      agentStarted.resolve(undefined);
+      return runGate.promise;
+    });
+    const self = new ScriptedSelf([
+      [started(), delegate()],
+      [started(1, { runId: "self-run-2" }), final("done", 2, "self-run-2")],
+    ]);
+    const setup = createService({ self, agent });
+    const input = { conversationId: "conversation-1", userMessage: "inspect" };
+
+    const first = setup.service.run(input);
+    await agentStarted.promise;
+    const concurrent = setup.service.run({ ...input });
+    const sharedPromise = concurrent === first;
+    runGate.resolve(successfulRun(turnId));
+    const outcomes = await Promise.allSettled([first, concurrent]);
+
+    expect(sharedPromise).toBe(true);
+    expect(outcomes[0]?.status).toBe("fulfilled");
+    expect(outcomes[1]?.status).toBe("fulfilled");
+    if (outcomes[0]?.status !== "fulfilled" || outcomes[1]?.status !== "fulfilled") {
+      throw new Error("expected_fulfilled_single_flight");
+    }
+    expect(outcomes[1].value).toBe(outcomes[0].value);
+    expect(self.requests).toHaveLength(2);
+    expect(agent.tasks).toHaveLength(1);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
+  });
+
+  it("returns the cached promise and result for a delayed identical retry", async () => {
+    const self = new ScriptedSelf([[started(), final("cached answer")]]);
+    const setup = createService({ self });
+    const input = { conversationId: "conversation-1", userMessage: "hello" };
+    const first = setup.service.run(input);
+    const firstResult = await first;
+
+    const retried = setup.service.run({ ...input });
+    const retriedResult = await retried;
+
+    expect(retried).toBe(first);
+    expect(retriedResult).toBe(firstResult);
+    expect(self.requests).toHaveLength(1);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
+  });
+
+  it.each([
+    ["message", { conversationId: "conversation-1", userMessage: "different" }],
+    ["conversation", { conversationId: "conversation-2", userMessage: "hello" }],
+  ] as const)("rejects a conflicting %s for a reused turn ID", async (_field, conflictInput) => {
+    const self = new ScriptedSelf([[started(), final("answer")]]);
+    const setup = createService({ self });
+    await setup.service.run({
+      conversationId: "conversation-1",
+      userMessage: "hello",
+    });
+
+    await expect(setup.service.run(conflictInput)).rejects.toThrowError(
+      "turn_run_conflict",
+    );
+
+    expect(self.requests).toHaveLength(1);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
+  });
+
   it("routes one delegate through validation, checkpointing, the agent, and the verifier", async () => {
     const checkpoints = new InMemoryCheckpointStore();
+    let verifiedReport: SelfRequest["evidence"][number] | undefined;
     const agent = new RecordingAgent(async (task) => {
       expect(checkpoints.has(task.turnId)).toBe(true);
       return successfulRun(task.turnId);
     });
     const self = new ScriptedSelf([
       [started(), delegate()],
-      [started(1, { runId: "self-run-2" }), final("inspection complete", 2, "self-run-2")],
+      [
+        started(1, { runId: "self-run-2" }),
+        {
+          ...final("inspection complete", 2, "self-run-2"),
+          id: "followup-final-event",
+        },
+      ],
     ]);
-    const setup = createService({ self, agent, checkpoints });
+    const setup = createService({
+      self,
+      agent,
+      checkpoints,
+      createFollowupRequest: (request, evidence) => {
+        verifiedReport = evidence[0];
+        return { ...request, evidence };
+      },
+    });
 
     const result = await setup.service.run({
       conversationId: "conversation-1",
@@ -255,15 +372,61 @@ describe("TurnService", () => {
         evidenceIds: ["evidence-1"],
       },
     ]);
+    expect(result.committed.finalResponseId).toBe("followup-final-event");
     expect(checkpoints.has(turnId)).toBe(false);
     expect(agent.tasks).toHaveLength(1);
     expect(agent.tasks[0]?.turnId).toBe(turnId);
     expect(self.requests).toHaveLength(2);
     expect(self.requests.map((request) => request.turnId)).toEqual([turnId, turnId]);
-    expect(self.requests[1]?.evidence[0]).toMatchObject({
+    expect(self.requests[1]?.turnInput).toEqual(self.requests[0]?.turnInput);
+    expect(self.requests[1]?.evidence[0]).toBe(verifiedReport);
+    expect(verifiedReport).toMatchObject({
       runId: "agent-run-1",
       status: "success",
     });
+  });
+
+  it.each([
+    "missing evidence",
+    "cloned evidence",
+    "changed user message id",
+    "changed user message content",
+  ] as const)("rejects follow-up provenance with %s", async (variant) => {
+    const self = new ScriptedSelf([[started(), delegate()]]);
+    const setup = createService({
+      self,
+      createFollowupRequest: (request, evidence) => {
+        if (variant === "missing evidence") {
+          return { ...request, evidence: [] };
+        }
+        if (variant === "cloned evidence") {
+          const cloned = {
+            ...evidence[0],
+          } as unknown as SelfRequest["evidence"][number];
+          return { ...request, evidence: [cloned] };
+        }
+        if (variant === "changed user message id") {
+          return {
+            ...request,
+            turnInput: { ...request.turnInput, id: "forged-user-message" },
+            evidence,
+          };
+        }
+        return {
+          ...request,
+          turnInput: { ...request.turnInput, content: "forged user content" },
+          evidence,
+        };
+      },
+    });
+
+    await expect(
+      setup.service.run({ conversationId: "conversation-1", userMessage: "inspect" }),
+    ).rejects.toThrowError("followup_request_provenance_invalid");
+
+    expect(self.requests).toHaveLength(1);
+    expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
+    expect(setup.checkpoints.has(turnId)).toBe(true);
   });
 
   it("rejects an unauthorized delegate before checkpointing or calling the agent", async () => {
@@ -281,6 +444,59 @@ describe("TurnService", () => {
     expect(setup.checkpoints.has(turnId)).toBe(false);
   });
 
+  it("cannot replace the trusted validator with an injected privileged task", async () => {
+    const self = new ScriptedSelf([
+      [
+        started(),
+        delegate({
+          goal: "write outside policy",
+          taskType: "workspace.write",
+          requestedCapabilities: ["shell"],
+        }),
+      ],
+    ]);
+    const agent = new RecordingAgent();
+    const conversations = new RecordingConversationStore();
+    const checkpoints = new InMemoryCheckpointStore();
+    const service = new TurnService({
+      self,
+      agent,
+      policy,
+      // @ts-expect-error Validation is an internal trusted boundary, not a dependency seam.
+      validate: () => ({
+        ok: true,
+        task: {
+          turnId,
+          taskId: "forged-task",
+          goal: "write outside policy",
+          scope: { taskType: "workspace.write", readOnly: false },
+          allowedTools: ["shell"],
+          context: {
+            goal: "write outside policy",
+            relevantFacts: [],
+            artifacts: [],
+            constraints: [],
+          },
+          inputs: [],
+        },
+      }),
+      createTurnId: () => turnId,
+      createInitialRequest: (id, userMessage) => createRequest(id, userMessage),
+      createFollowupRequest: (request, evidence) => ({ ...request, evidence }),
+      build,
+      conversations,
+      checkpoints,
+    });
+
+    await expect(
+      service.run({ conversationId: "conversation-1", userMessage: "write" }),
+    ).rejects.toThrowError("delegate_rejected:task_denied");
+
+    expect(agent.tasks).toEqual([]);
+    expect(conversations.attempts).toEqual([]);
+    expect(checkpoints.has(turnId)).toBe(false);
+  });
+
   it("retains the checkpoint and does not commit when the agent throws", async () => {
     const self = new ScriptedSelf([[started(), delegate()]]);
     const agent = new RecordingAgent(async () => {
@@ -292,6 +508,28 @@ describe("TurnService", () => {
       setup.service.run({ conversationId: "conversation-1", userMessage: "inspect" }),
     ).rejects.toThrowError("agent_unavailable");
 
+    expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
+    expect(setup.checkpoints.has(turnId)).toBe(true);
+  });
+
+  it("caches a failed turn attempt instead of replaying side effects", async () => {
+    const self = new ScriptedSelf([[started(), delegate()]]);
+    const agent = new RecordingAgent(async () => {
+      throw new Error("agent_unavailable");
+    });
+    const setup = createService({ self, agent });
+    const input = { conversationId: "conversation-1", userMessage: "inspect" };
+    const first = setup.service.run(input);
+    await expect(first).rejects.toThrowError("agent_unavailable");
+
+    const retried = setup.service.run({ ...input });
+    const samePromise = retried === first;
+    const retryError = await retried.catch((error: unknown) => error);
+
+    expect(samePromise).toBe(true);
+    expect(retryError).toMatchObject({ message: "agent_unavailable" });
+    expect(self.requests).toHaveLength(1);
+    expect(agent.tasks).toHaveLength(1);
     expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
     expect(setup.checkpoints.has(turnId)).toBe(true);
   });
@@ -479,6 +717,24 @@ describe("InMemoryConversationStore", () => {
     expect(retried.commitVersion).toBe(1);
   });
 
+  it("treats schema objects with different key insertion order as the same payload", () => {
+    const store = new InMemoryConversationStore();
+    const first = store.commit(record());
+    const reorderedSchema: BuildMetadata["schema"] = {
+      runtimeCheckpoint: 1,
+      relationship: 1,
+      memory: 1,
+      conversation: 1,
+    };
+
+    const retried = store.commit({
+      ...record(),
+      build: { ...build, schema: reorderedSchema },
+    });
+
+    expect(retried).toBe(first);
+  });
+
   it("protects the committed fact from caller mutation", () => {
     const store = new InMemoryConversationStore();
     const first = store.commit({
@@ -505,5 +761,21 @@ describe("InMemoryConversationStore", () => {
     expect(() =>
       store.commit({ ...record(), conversationId: "conversation-2" }),
     ).toThrowError("turn_commit_conflict");
+  });
+});
+
+describe("InMemoryCheckpointStore", () => {
+  it("does not let an old attempt complete a newer checkpoint", () => {
+    const store = new InMemoryCheckpointStore();
+    const oldOwner = Symbol("old-attempt");
+    const currentOwner = Symbol("current-attempt");
+    store.save(turnId, oldOwner);
+    store.save(turnId, currentOwner);
+
+    store.complete(turnId, oldOwner);
+
+    expect(store.has(turnId)).toBe(true);
+    store.complete(turnId, currentOwner);
+    expect(store.has(turnId)).toBe(false);
   });
 });

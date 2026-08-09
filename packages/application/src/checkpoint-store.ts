@@ -1,22 +1,24 @@
 import type { TurnId } from "@xiadie/xiadie-core";
 
+export type CheckpointOwner = symbol;
+
 export interface CheckpointStore {
-  save(turnId: TurnId): void;
-  complete(turnId: TurnId): void;
+  save(turnId: TurnId, owner: CheckpointOwner): void;
+  complete(turnId: TurnId, owner: CheckpointOwner): void;
 }
 
 export class InMemoryCheckpointStore implements CheckpointStore {
-  private readonly ids = new Set<TurnId>();
+  private readonly owners = new Map<TurnId, CheckpointOwner>();
 
-  save(turnId: TurnId): void {
-    this.ids.add(turnId);
+  save(turnId: TurnId, owner: CheckpointOwner): void {
+    this.owners.set(turnId, owner);
   }
 
-  complete(turnId: TurnId): void {
-    this.ids.delete(turnId);
+  complete(turnId: TurnId, owner: CheckpointOwner): void {
+    if (this.owners.get(turnId) === owner) this.owners.delete(turnId);
   }
 
   has(turnId: TurnId): boolean {
-    return this.ids.has(turnId);
+    return this.owners.has(turnId);
   }
 }
