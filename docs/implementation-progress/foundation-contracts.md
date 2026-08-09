@@ -18,8 +18,8 @@
 
 | 任务 | 状态 | 实现提交 | 验证 | 审查 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1. TypeScript 工作区与质量门禁 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 2. Core ID、上下文与 Turn 契约 | 待开始 | — | — | — | — |
+| 1. TypeScript 工作区与质量门禁 | 已完成 | `46232e2` | 1/1 测试通过；typecheck exit 0 | Approved | TypeScript 7 路径映射兼容修正已审查通过 |
+| 2. Core ID、上下文与 Turn 契约 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 | 3. SelfRuntime / AgentRuntime 契约与事件 | 待开始 | — | — | — | — |
 | 4. DelegateValidator 与上下文防火墙 | 待开始 | — | — | — | — |
 | 5. SelfRequestAssembler 与确定性预算 | 待开始 | — | — | — | — |
@@ -33,7 +33,10 @@
 | 日期 | 类型 | 提交/范围 | 结果 |
 | --- | --- | --- | --- |
 | 2026-08-09 | 隔离准备 | `1421564` | 建立并忽略 `.worktrees/`，创建 `feature/foundation-contracts` 工作树 |
+| 2026-08-09 | 任务 1 实现 | `46232e2` | 建立 TypeScript/pnpm/Vitest workspace；完整测试与 typecheck 通过 |
+| 2026-08-09 | 任务 1 审查 | `ad11e0f..46232e2` | 规格符合、质量 Approved；无 Critical/Important 问题 |
 
 ## 遗留事项
 
-- 暂无。
+- 本机直接执行 `node --version` 为 24.16.0，但 `pnpm.cmd` 报告其宿主 Node 为 24.14.0；当前验证通过，最终验收前继续调查并争取消除该环境警告。
+- Task 1 按 TypeScript 7.0.2 兼容性要求移除了已废弃的 `baseUrl`，并将四个 `paths` 目标改为等价相对路径；任务审查确认合理。
