@@ -17,19 +17,34 @@ This is evidence for the Phase 1 foundation-contract vertical slice only. It doe
 | pnpm | `11.16.0` |
 | Test runner | Vitest `v4.1.10` |
 
-The normal developer commands remain `pnpm test` and `pnpm typecheck` (see the README). In this Codex environment, the default `pnpm.cmd` wrapper uses bundled Node `24.14` and emits an engine warning. To obtain clean evidence for the repository's locked Node version, this verification invoked the bundled pnpm `11.16.0` entry point with system Node `C:\Program Files\nodejs\node.exe` (`v24.16.0`) and `CI=true`.
+The normal developer commands remain `pnpm test` and `pnpm typecheck` (see the README). In this Codex environment, the default `pnpm.cmd` wrapper uses bundled Node `24.14` and emits an engine warning. To obtain clean evidence for the repository's locked Node version, this verification invoked the bundled pnpm `11.16.0` entry point with system Node `C:\Program Files\nodejs\node.exe` (`v24.16.0`) after setting `$env:CI='true'`.
+
+## Actual Windows PowerShell commands
+
+The following commands were used for this verification and can be copied into Windows PowerShell:
+
+```powershell
+$env:CI='true'
+$systemNode = 'C:\Program Files\nodejs\node.exe'
+$pnpmEntry = 'C:\Users\liyi\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules\pnpm\bin\pnpm.mjs'
+
+& $systemNode --version
+& $systemNode $pnpmEntry --version
+& $systemNode $pnpmEntry test
+& $systemNode $pnpmEntry typecheck
+```
 
 ## Commands and results
 
 | Check | Result |
 | --- | --- |
-| `C:\Program Files\nodejs\node.exe --version` | `v24.16.0` |
-| `CI=true C:\Program Files\nodejs\node.exe ...\pnpm.mjs --version` | `11.16.0` |
-| `CI=true C:\Program Files\nodejs\node.exe ...\pnpm.mjs test` | exit `0`; 8 test files passed, 74 tests passed, 0 failed |
-| `CI=true C:\Program Files\nodejs\node.exe ...\pnpm.mjs typecheck` | exit `0` |
-| `git grep -niE '@mastra\|electron\|model[[:space:]-]*sdk\|zod\|database' -- packages/xiadie-core` | no output; `git grep` exit `1` means no matching lines |
+| First PowerShell command block: Node version | `v24.16.0` |
+| First PowerShell command block: pnpm version | `11.16.0` |
+| First PowerShell command block: test | exit `0`; 8 test files passed, 74 tests passed, 0 failed |
+| First PowerShell command block: typecheck | exit `0` |
+| `git grep -ni -e '@mastra' -e 'electron' -e 'model SDK' -e 'zod' -e 'database' -- packages/xiadie-core` | no output; `git grep` exit `1` means no matching lines |
 
-The final grep covers the prohibited Core references for Mastra, Electron, model SDKs, Zod, and database implementations. No Core source or package metadata matched.
+The final grep scans Core source and tracked package metadata for the prohibited Mastra, Electron, model SDK, Zod, and database references. It produced no output; exit `1` is `git grep`'s expected no-match status.
 
 ## Proven boundary evidence
 
