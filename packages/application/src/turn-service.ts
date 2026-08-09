@@ -111,48 +111,123 @@ interface TurnFlight {
   promise: Promise<TurnRunResult>;
 }
 
-export class TurnService {
-  private readonly runs = new Map<TurnId, TurnFlight>();
+interface TurnPreflight {
+  turnId: TurnId;
+  input: TurnRunInput;
+  inputFingerprint: string;
+  initial: SelfRequest;
+  userMessageId: string;
+}
 
-  constructor(private readonly dependencies: TurnServiceDependencies) {}
+export interface TurnServiceOptions {
+  historyCapacity?: number;
+}
+
+const TURN_HISTORY_CAPACITY_V0_1 = 32;
+
+export class TurnService {
+  private readonly inFlight = new Map<TurnId, TurnFlight>();
+  private readonly history = new Map<TurnId, TurnFlight>();
+  private readonly historyCapacity: number;
+
+  constructor(
+    private readonly dependencies: TurnServiceDependencies,
+    options: TurnServiceOptions = {},
+  ) {
+    this.historyCapacity = options.historyCapacity ?? TURN_HISTORY_CAPACITY_V0_1;
+  }
 
   run(input: TurnRunInput): Promise<TurnRunResult> {
     const turnId = this.dependencies.createTurnId();
+    let preflight: TurnPreflight;
+    try {
+      preflight = this.preflight(turnId, input);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
+    const inFlight = this.inFlight.get(turnId);
+    if (inFlight !== undefined) {
+      if (inFlight.inputFingerprint !== preflight.inputFingerprint) {
+        return Promise.reject(new Error("turn_run_conflict"));
+      }
+      return inFlight.promise;
+    }
+
+    const historical = this.history.get(turnId);
+    if (historical !== undefined) {
+      if (historical.inputFingerprint !== preflight.inputFingerprint) {
+        return Promise.reject(new Error("turn_run_conflict"));
+      }
+      this.history.delete(turnId);
+      this.history.set(turnId, historical);
+      return historical.promise;
+    }
+
+    if (this.dependencies.conversations.has(turnId)) {
+      return Promise.reject(new Error("turn_already_committed"));
+    }
+    if (this.dependencies.checkpoints.has(turnId)) {
+      return Promise.reject(new Error("turn_recovery_required"));
+    }
+
+    const promise = this.execute(preflight);
+    const flight = {
+      inputFingerprint: preflight.inputFingerprint,
+      promise,
+    };
+    this.inFlight.set(turnId, flight);
+    void promise.then(
+      () => this.settle(turnId, flight),
+      () => this.settle(turnId, flight),
+    );
+    return promise;
+  }
+
+  private settle(turnId: TurnId, flight: TurnFlight): void {
+    if (this.inFlight.get(turnId) !== flight) return;
+    this.inFlight.delete(turnId);
+    this.history.delete(turnId);
+    this.history.set(turnId, flight);
+
+    while (this.history.size > this.historyCapacity) {
+      const oldest = this.history.keys().next().value;
+      if (oldest === undefined) return;
+      this.history.delete(oldest);
+    }
+  }
+
+  private preflight(turnId: TurnId, input: TurnRunInput): TurnPreflight {
     const runInput: TurnRunInput = {
       conversationId: input.conversationId,
       userMessage: input.userMessage,
     };
-    const inputFingerprint = JSON.stringify([
-      runInput.conversationId,
-      runInput.userMessage,
-    ]);
-    const existing = this.runs.get(turnId);
-    if (existing !== undefined) {
-      if (existing.inputFingerprint !== inputFingerprint) {
-        return Promise.reject(new Error("turn_run_conflict"));
-      }
-      return existing.promise;
-    }
-
-    const promise = this.execute(turnId, runInput);
-    this.runs.set(turnId, { inputFingerprint, promise });
-    return promise;
-  }
-
-  private async execute(
-    turnId: TurnId,
-    input: TurnRunInput,
-  ): Promise<TurnRunResult> {
+    const userMessageId = `${turnId}:user:0`;
     const initial = this.dependencies.createInitialRequest(
       turnId,
-      input.userMessage,
+      runInput.userMessage,
     );
-    if (initial.turnId !== turnId) {
-      throw new Error("initial_request_turn_id_mismatch");
-    }
-    if (initial.turnInput.content !== input.userMessage) {
+    if (
+      initial.turnId !== turnId ||
+      initial.turnInput.id !== userMessageId ||
+      initial.turnInput.content !== runInput.userMessage
+    ) {
       throw new Error("initial_request_provenance_invalid");
     }
+    return {
+      turnId,
+      input: runInput,
+      inputFingerprint: JSON.stringify([
+        runInput.conversationId,
+        runInput.userMessage,
+      ]),
+      initial,
+      userMessageId,
+    };
+  }
+
+  private async execute(preflight: TurnPreflight): Promise<TurnRunResult> {
+    const { turnId, input, initial, userMessageId } = preflight;
 
     const first = await collectDecision(
       this.dependencies.self.respond(initial),
@@ -179,8 +254,7 @@ export class TurnService {
         throw new Error("delegate_turn_id_mismatch");
       }
 
-      checkpointOwner = Symbol(`turn-attempt:${turnId}`);
-      this.dependencies.checkpoints.save(turnId, checkpointOwner);
+      checkpointOwner = this.dependencies.checkpoints.save(turnId);
 
       const run = await this.dependencies.agent.start(validated.task);
       if (run.turnId !== turnId) throw new Error("agent_turn_id_mismatch");
@@ -218,7 +292,7 @@ export class TurnService {
     const record: VerifiedTurnRecord = {
       turnId,
       conversationId: input.conversationId,
-      userMessageId: initial.turnInput.id,
+      userMessageId,
       finalResponseId,
       executions,
       timestamp: Date.now(),

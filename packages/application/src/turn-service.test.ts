@@ -57,7 +57,7 @@ const createRequest = (
     relationship: { sharedProjects: [] },
   },
   memories: [],
-  turnInput: { id: `${id}:user`, content: userMessage },
+  turnInput: { id: `${id}:user:0`, content: userMessage },
   evidence,
   capabilities: { descriptions: ["workspace.read"] },
 });
@@ -185,6 +185,10 @@ class RecordingConversationStore implements ConversationStore {
   readonly attempts: VerifiedTurnRecord[] = [];
   private readonly inner = new InMemoryConversationStore();
 
+  has(id: TurnId): boolean {
+    return this.inner.has(id);
+  }
+
   commit(record: VerifiedTurnRecord): CommittedTurnRecord {
     this.attempts.push(record);
     return this.inner.commit(record);
@@ -196,6 +200,8 @@ interface ServiceOptions {
   agent?: AgentRuntime;
   conversations?: ConversationStore;
   checkpoints?: InMemoryCheckpointStore;
+  createTurnId?: () => TurnId;
+  historyCapacity?: number;
   createInitialRequest?: (id: TurnId, userMessage: string) => SelfRequest;
   createFollowupRequest?: (
     request: SelfRequest,
@@ -208,20 +214,25 @@ const createService = ({
   agent = new RecordingAgent(),
   conversations = new RecordingConversationStore(),
   checkpoints = new InMemoryCheckpointStore(),
+  createTurnId = () => turnId,
+  historyCapacity,
   createInitialRequest = (id, userMessage) => createRequest(id, userMessage),
   createFollowupRequest = (request, evidence) => ({ ...request, evidence }),
 }: ServiceOptions) => ({
-  service: new TurnService({
-    self,
-    agent,
-    policy,
-    createTurnId: () => turnId,
-    createInitialRequest,
-    createFollowupRequest,
-    build,
-    conversations,
-    checkpoints,
-  }),
+  service: new TurnService(
+    {
+      self,
+      agent,
+      policy,
+      createTurnId,
+      createInitialRequest,
+      createFollowupRequest,
+      build,
+      conversations,
+      checkpoints,
+    },
+    historyCapacity === undefined ? {} : { historyCapacity },
+  ),
   agent,
   conversations,
   checkpoints,
@@ -239,6 +250,7 @@ describe("TurnService", () => {
 
     expect(result.finalResponse).toBe("direct answer");
     expect(result.committed.turnId).toBe(turnId);
+    expect(result.committed.userMessageId).toBe("turn-1:user:0");
     expect(result.committed.finalResponseId).toBe("self-event-2");
     expect(result.committed.executions).toEqual([]);
     expect((setup.agent as RecordingAgent).tasks).toEqual([]);
@@ -263,6 +275,60 @@ describe("TurnService", () => {
 
     expect(self.requests).toEqual([]);
     expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
+  });
+
+  it("rejects an initial request with a forged user message ID", async () => {
+    const self = new ScriptedSelf([[started(), final("forged answer")]]);
+    const setup = createService({
+      self,
+      createInitialRequest: (id, userMessage) => ({
+        ...createRequest(id, userMessage),
+        turnInput: { id: "forged-user-message", content: userMessage },
+      }),
+    });
+
+    await expect(
+      setup.service.run({
+        conversationId: "conversation-1",
+        userMessage: "original input",
+      }),
+    ).rejects.toThrowError("initial_request_provenance_invalid");
+
+    expect(self.requests).toEqual([]);
+    expect((setup.conversations as RecordingConversationStore).attempts).toEqual([]);
+  });
+
+  it("allows a corrected retry after synchronous initial-request preflight fails", async () => {
+    let initialAttempts = 0;
+    const self = new ScriptedSelf([[started(), final("corrected answer")]]);
+    const setup = createService({
+      self,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        const request = createRequest(id, userMessage);
+        if (initialAttempts === 1) {
+          return {
+            ...request,
+            turnInput: { ...request.turnInput, id: "forged-user-message" },
+          };
+        }
+        return request;
+      },
+    });
+    const input = {
+      conversationId: "conversation-1",
+      userMessage: "original input",
+    };
+
+    await expect(setup.service.run(input)).rejects.toThrowError(
+      "initial_request_provenance_invalid",
+    );
+    const retried = await setup.service.run({ ...input });
+
+    expect(retried.finalResponse).toBe("corrected answer");
+    expect(initialAttempts).toBe(2);
+    expect(self.requests).toHaveLength(1);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
   });
 
   it("single-flights concurrent calls for the same turn input", async () => {
@@ -312,6 +378,116 @@ describe("TurnService", () => {
     expect(retriedResult).toBe(firstResult);
     expect(self.requests).toHaveLength(1);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
+  });
+
+  it("removes a settled flight and refuses to replay an evicted committed turn", async () => {
+    const turn2 = asTurnId("turn-2");
+    const ids = [turnId, turn2, turnId];
+    const self = new ScriptedSelf([
+      [started(), final("first answer")],
+      [
+        started(1, { turnId: turn2, runId: "self-run-turn-2" }),
+        {
+          ...final("second answer", 2, "self-run-turn-2"),
+          turnId: turn2,
+        },
+      ],
+    ]);
+    const setup = createService({
+      self,
+      historyCapacity: 1,
+      createTurnId: () => {
+        const next = ids.shift();
+        if (next === undefined) throw new Error("unexpected_turn_id_request");
+        return next;
+      },
+    });
+    const firstInput = { conversationId: "conversation-1", userMessage: "first" };
+    await setup.service.run(firstInput);
+    await setup.service.run({ conversationId: "conversation-2", userMessage: "second" });
+
+    await expect(setup.service.run({ ...firstInput })).rejects.toThrowError(
+      "turn_already_committed",
+    );
+
+    expect(self.requests).toHaveLength(2);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(2);
+  });
+
+  it("uses LRU recency when evicting bounded turn history", async () => {
+    const turn2 = asTurnId("turn-2");
+    const turn3 = asTurnId("turn-3");
+    const ids = [turnId, turn2, turnId, turn3, turn2];
+    const input1 = { conversationId: "conversation-1", userMessage: "first" };
+    const input2 = { conversationId: "conversation-2", userMessage: "second" };
+    const input3 = { conversationId: "conversation-3", userMessage: "third" };
+    const self = new ScriptedSelf([
+      [started(), final("first answer")],
+      [
+        started(1, { turnId: turn2, runId: "self-run-turn-2" }),
+        { ...final("second answer", 2, "self-run-turn-2"), turnId: turn2 },
+      ],
+      [
+        started(1, { turnId: turn3, runId: "self-run-turn-3" }),
+        { ...final("third answer", 2, "self-run-turn-3"), turnId: turn3 },
+      ],
+    ]);
+    const setup = createService({
+      self,
+      historyCapacity: 2,
+      createTurnId: () => {
+        const next = ids.shift();
+        if (next === undefined) throw new Error("unexpected_turn_id_request");
+        return next;
+      },
+    });
+    const first = await setup.service.run(input1);
+    await setup.service.run(input2);
+    expect(await setup.service.run({ ...input1 })).toBe(first);
+    await setup.service.run(input3);
+
+    await expect(setup.service.run({ ...input2 })).rejects.toThrowError(
+      "turn_already_committed",
+    );
+
+    expect(self.requests).toHaveLength(3);
+    expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(3);
+  });
+
+  it("refuses to replay an evicted failed attempt that retains a checkpoint", async () => {
+    const turn2 = asTurnId("turn-2");
+    const ids = [turnId, turn2, turnId];
+    const self = new ScriptedSelf([
+      [started(), delegate()],
+      [
+        started(1, { turnId: turn2, runId: "self-run-turn-2" }),
+        { ...final("second answer", 2, "self-run-turn-2"), turnId: turn2 },
+      ],
+    ]);
+    const agent = new RecordingAgent(async () => {
+      throw new Error("agent_unavailable");
+    });
+    const setup = createService({
+      self,
+      agent,
+      historyCapacity: 1,
+      createTurnId: () => {
+        const next = ids.shift();
+        if (next === undefined) throw new Error("unexpected_turn_id_request");
+        return next;
+      },
+    });
+    const failedInput = { conversationId: "conversation-1", userMessage: "inspect" };
+    await expect(setup.service.run(failedInput)).rejects.toThrowError("agent_unavailable");
+    await setup.service.run({ conversationId: "conversation-2", userMessage: "second" });
+
+    await expect(setup.service.run({ ...failedInput })).rejects.toThrowError(
+      "turn_recovery_required",
+    );
+
+    expect(self.requests).toHaveLength(2);
+    expect(agent.tasks).toHaveLength(1);
+    expect(setup.checkpoints.has(turnId)).toBe(true);
   });
 
   it.each([
@@ -682,6 +858,7 @@ describe("TurnService", () => {
       [started(1, { runId: "self-run-2" }), final("done", 2, "self-run-2")],
     ]);
     const conversations: ConversationStore = {
+      has: () => false,
       commit: () => {
         throw new Error("commit_failed");
       },
@@ -705,6 +882,15 @@ describe("InMemoryConversationStore", () => {
     executions: [],
     timestamp: 1,
     build,
+  });
+
+  it("reports whether a turn is already committed", () => {
+    const store = new InMemoryConversationStore();
+    expect(store.has(turnId)).toBe(false);
+
+    store.commit(record());
+
+    expect(store.has(turnId)).toBe(true);
   });
 
   it("returns the original committed record for an identical turn payload", () => {
@@ -765,12 +951,12 @@ describe("InMemoryConversationStore", () => {
 });
 
 describe("InMemoryCheckpointStore", () => {
-  it("does not let an old attempt complete a newer checkpoint", () => {
+  it("mints a fresh owner and does not let an old attempt complete a newer checkpoint", () => {
     const store = new InMemoryCheckpointStore();
-    const oldOwner = Symbol("old-attempt");
-    const currentOwner = Symbol("current-attempt");
-    store.save(turnId, oldOwner);
-    store.save(turnId, currentOwner);
+    const oldOwner = store.save(turnId);
+    const currentOwner = store.save(turnId);
+
+    expect(currentOwner).not.toBe(oldOwner);
 
     store.complete(turnId, oldOwner);
 

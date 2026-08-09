@@ -1,9 +1,11 @@
 import type {
   CommittedTurnRecord,
+  TurnId,
   VerifiedTurnRecord,
 } from "@xiadie/xiadie-core";
 
 export interface ConversationStore {
+  has(turnId: TurnId): boolean;
   commit(record: VerifiedTurnRecord): CommittedTurnRecord;
 }
 
@@ -48,6 +50,10 @@ const freezeCommitted = (
 export class InMemoryConversationStore implements ConversationStore {
   private readonly turns = new Map<string, CommittedTurnRecord>();
   private readonly inputs = new Map<string, string>();
+
+  has(turnId: TurnId): boolean {
+    return this.turns.has(turnId);
+  }
 
   commit(record: VerifiedTurnRecord): CommittedTurnRecord {
     const payload = canonicalPayload(record);
