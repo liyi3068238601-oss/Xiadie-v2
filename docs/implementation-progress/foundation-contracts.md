@@ -23,8 +23,8 @@
 | 3. SelfRuntime / AgentRuntime 契约与事件 | 已完成 | `c34af6f` | 4/4 测试通过；typecheck exit 0 | Approved | 运行级序列校验归 Task 6/7 |
 | 4. DelegateValidator 与上下文防火墙 | 已完成 | `91ab523` | 9/9 测试通过；typecheck exit 0 | Approved | Zod 4.4.3 精确锁定 |
 | 5. SelfRequestAssembler 与确定性预算 | 已完成 | `0bf0229`, `5802514` | 13/13 测试通过；typecheck exit 0 | 修复后 Approved | 可变上下文深层隔离，opaque evidence 保持 identity |
-| 6. ExecutionVerifier | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 7. 内存版 TurnService 垂直切片 | 待开始 | — | — | — | — |
+| 6. ExecutionVerifier | 已完成 | `01bce4f`, `344e0a0` | 29/29 测试通过；typecheck exit 0 | 安全修复后 Approved | 重复/冲突 operation 与 candidate 全部 fail closed |
+| 7. 内存版 TurnService 垂直切片 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 | 8. 验证证据、README 与最终检查 | 待开始 | — | — | — | — |
 | 全分支审查 | 待开始 | — | — | — | — |
 
@@ -45,6 +45,9 @@
 | 2026-08-09 | 任务 5 实现 | `0bf0229` | 完成 SelfRequest 分区组装与确定性预算 |
 | 2026-08-09 | 任务 5 审查修复 | `5802514` | 隔离全部可变上下文；测试 fixture 与生产 verified 边界分离 |
 | 2026-08-09 | 任务 5 复审 | `37371e2..5802514` | Approved；无 Critical/Important 问题 |
+| 2026-08-09 | 任务 6 实现 | `01bce4f` | 完成确定性证据验证、唯一 terminal、顺序与全链路 ID 校验 |
+| 2026-08-09 | 任务 6 安全修复 | `344e0a0` | 拒绝 operation/result/candidate 歧义并补齐 public API |
+| 2026-08-09 | 任务 6 复审 | `6daa1f5..344e0a0` | Approved；唯一生产 opaque 构造边界保持成立 |
 
 ## 遗留事项
 
