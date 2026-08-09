@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { asTurnId } from "@xiadie/xiadie-core";
 import type { RuntimeEvent, RuntimeRunRecord } from "@xiadie/agent-runtime";
-import { verifyExecution } from "./execution-verifier.js";
+import { verifyExecution } from "./index.js";
 
 const event = (
   type: RuntimeEvent["type"],
@@ -206,6 +206,125 @@ describe("verifyExecution", () => {
     expect(report).toEqual({
       runId: "run-1",
       status: "partial",
+      evidence: [],
+    });
+  });
+
+  it("rejects conflicting tool terminal events for one operation", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            {
+              ...event("tool.failed", "op-1", 2),
+              type: "tool.failed",
+              error: "failed after completion",
+            },
+            event("run.completed", "run-op", 3),
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_operation_state_invalid");
+  });
+
+  it("rejects duplicate completed events for one operation", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            event("tool.completed", "op-1", 2),
+            event("run.completed", "run-op", 3),
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_operation_state_invalid");
+  });
+
+  it("rejects duplicate identical tool results", () => {
+    const result = { operationId: "op-1", ok: true, summary: "created" };
+
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            event("run.completed", "run-op", 2),
+          ],
+          toolResults: [result, { ...result }],
+        }),
+      ),
+    ).toThrowError("runtime_operation_state_invalid");
+  });
+
+  it("rejects conflicting tool results", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            event("run.completed", "run-op", 2),
+          ],
+          toolResults: [
+            { operationId: "op-1", ok: true, summary: "created" },
+            { operationId: "op-1", ok: false, summary: "failed" },
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_operation_state_invalid");
+  });
+
+  it("rejects duplicate candidate IDs", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            event("tool.completed", "op-2", 2),
+            event("run.completed", "run-op", 3),
+          ],
+          toolResults: [
+            { operationId: "op-1", ok: true, summary: "first" },
+            { operationId: "op-2", ok: true, summary: "second" },
+          ],
+          candidates: [
+            { id: "e-1", operationId: "op-1", summary: "first" },
+            { id: "e-1", operationId: "op-2", summary: "second" },
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_evidence_candidate_invalid");
+  });
+
+  it("rejects multiple candidates for one operation", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", "op-1", 1),
+            event("run.completed", "run-op", 2),
+          ],
+          toolResults: [
+            { operationId: "op-1", ok: true, summary: "created" },
+          ],
+          candidates: [
+            { id: "e-1", operationId: "op-1", summary: "first" },
+            { id: "e-2", operationId: "op-1", summary: "second" },
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_evidence_candidate_invalid");
+  });
+
+  it("reports cancelled runs as failed", () => {
+    const report = verifyExecution(
+      runRecord({ events: [event("run.cancelled", "run-op", 1)] }),
+    );
+
+    expect(report).toEqual({
+      runId: "run-1",
+      status: "failed",
       evidence: [],
     });
   });

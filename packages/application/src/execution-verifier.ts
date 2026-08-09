@@ -22,6 +22,9 @@ export function verifyExecution(
     throw new Error("runtime_terminal_state_invalid");
   }
 
+  const toolTerminalOperations = new Set<string>();
+  const completedOperations = new Set<string>();
+
   for (let index = 0; index < run.events.length; index += 1) {
     const current = run.events[index];
     if (current === undefined) continue;
@@ -34,19 +37,42 @@ export function verifyExecution(
     if (previous !== undefined && current.sequence <= previous.sequence) {
       throw new Error("runtime_event_sequence_invalid");
     }
+
+    if (current.type === "tool.completed" || current.type === "tool.failed") {
+      if (toolTerminalOperations.has(current.operationId)) {
+        throw new Error("runtime_operation_state_invalid");
+      }
+      toolTerminalOperations.add(current.operationId);
+      if (current.type === "tool.completed") {
+        completedOperations.add(current.operationId);
+      }
+    }
   }
 
   const terminal = run.events[terminalIndexes[0] as number];
-  const completedOperations = new Set(
-    run.events
-      .filter((event) => event.type === "tool.completed")
-      .map((event) => event.operationId),
-  );
-  const successfulOperations = new Set(
-    run.toolResults
-      .filter((result) => result.ok)
-      .map((result) => result.operationId),
-  );
+  const resultOperations = new Set<string>();
+  const successfulOperations = new Set<string>();
+  for (const result of run.toolResults) {
+    if (resultOperations.has(result.operationId)) {
+      throw new Error("runtime_operation_state_invalid");
+    }
+    resultOperations.add(result.operationId);
+    if (result.ok) successfulOperations.add(result.operationId);
+  }
+
+  const candidateIds = new Set<string>();
+  const candidateOperations = new Set<string>();
+  for (const candidate of run.candidates) {
+    if (
+      candidateIds.has(candidate.id) ||
+      candidateOperations.has(candidate.operationId)
+    ) {
+      throw new Error("runtime_evidence_candidate_invalid");
+    }
+    candidateIds.add(candidate.id);
+    candidateOperations.add(candidate.operationId);
+  }
+
   const evidence = run.candidates
     .filter(
       (candidate) =>
