@@ -24,8 +24,8 @@
 | 4. DelegateValidator 与上下文防火墙 | 已完成 | `91ab523` | 9/9 测试通过；typecheck exit 0 | Approved | Zod 4.4.3 精确锁定 |
 | 5. SelfRequestAssembler 与确定性预算 | 已完成 | `0bf0229`, `5802514` | 13/13 测试通过；typecheck exit 0 | 修复后 Approved | 可变上下文深层隔离，opaque evidence 保持 identity |
 | 6. ExecutionVerifier | 已完成 | `01bce4f`, `344e0a0` | 29/29 测试通过；typecheck exit 0 | 安全修复后 Approved | 重复/冲突 operation 与 candidate 全部 fail closed |
-| 7. 内存版 TurnService 垂直切片 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
-| 8. 验证证据、README 与最终检查 | 待开始 | — | — | — | — |
+| 7. 内存版 TurnService 垂直切片 | 已完成 | `45307eb`, `99454ce`, `4602060`, `a46e125` | 74/74 测试通过；typecheck/diff-check exit 0 | 多轮硬化后 Approved | trusted validator、single-flight、token checkpoint、provenance、bounded LRU |
+| 8. 验证证据、README 与最终检查 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
 | 全分支审查 | 待开始 | — | — | — | — |
 
 ## 提交与审查流水
@@ -48,6 +48,11 @@
 | 2026-08-09 | 任务 6 实现 | `01bce4f` | 完成确定性证据验证、唯一 terminal、顺序与全链路 ID 校验 |
 | 2026-08-09 | 任务 6 安全修复 | `344e0a0` | 拒绝 operation/result/candidate 歧义并补齐 public API |
 | 2026-08-09 | 任务 6 复审 | `6daa1f5..344e0a0` | Approved；唯一生产 opaque 构造边界保持成立 |
+| 2026-08-09 | 任务 7 实现 | `45307eb` | 闭合直接回答与受控委托的内存 TurnService |
+| 2026-08-09 | 任务 7 边界硬化 | `99454ce` | 固定真实 validator、消息来源、final ID、checkpoint owner 与 schema canonicalization |
+| 2026-08-09 | 任务 7 生命周期硬化 | `4602060` | 引入 bounded LRU、Store 签发 token 与逐出后 replay guards |
+| 2026-08-09 | 任务 7 缓存顺序硬化 | `a46e125` | 校验容量并将 fingerprint/cache/store guards 前置到 factory |
+| 2026-08-09 | 任务 7 最终复审 | `a66cfb0..a46e125` | Approved；无 Critical/Important 遗留 |
 
 ## 遗留事项
 
