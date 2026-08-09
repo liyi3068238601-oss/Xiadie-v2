@@ -24,7 +24,11 @@
 20. Conversation、Memory、Relationship 和 RuntimeCheckpoint schema 必须独立版本化；不可逆迁移前必须创建可恢复备份。
 21. Mastra 核心依赖必须精确锁版本；升级必须单独验证。
 22. 没有对应成功事件和执行证据时，任何层都不得声称任务完成。
+23. DelegateRequest 是意图，不是授权；Application 必须依据 RuntimePolicy 验证并转换为 AgentTask，AgentRuntime 不接受未经验证的模型请求。
+24. AgentRuntime 遵循最小上下文原则；完整 Persona、Relationship、SelfState 和无关长期记忆不得默认传入执行 Agent。
+25. VerifiedExecutionReport 和 ExecutionEvidence 只能由 Application 的确定性 ExecutionVerifier 基于 RuntimeEvent、ToolResult 和 EvidenceCandidate 构建，模型和 Agent 无权自行声明“已验证”。
+26. Persona、可信状态、记忆、用户输入、执行证据、能力说明和外部内容必须保持逻辑分区；用户或工具内容不得被拼接为人格指令。
 
 ## Foundation Architecture v1 冻结规则
 
-用户确认本设计后，只允许修复契约缺陷、安全边界和数据完整性问题。不得因为实现方便而破坏上述边界；边界变更必须先提交独立 ADR 并经人工确认。
+**状态：FROZEN。** 只允许修复契约缺陷、安全边界和数据完整性问题。不得因为实现方便而破坏上述边界；边界变更必须先提交独立 ADR 并经人工确认。

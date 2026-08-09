@@ -2,7 +2,7 @@
 
 **日期：** 2026-08-09
 
-**状态：** Foundation Architecture v1 候选版，等待最终确认
+**状态：** Foundation Architecture v1 — FROZEN
 
 **项目根目录：** `E:\Xiadie\Xiadie-next`
 
@@ -40,7 +40,11 @@ Self Runtime 和 Agent Runtime 的首个适配器都可以使用 Mastra，但二
 为完成这两个实验，第一版必须具备：
 
 - 结构化人格资产和统一 PersonaCompiler；
+- 分区的 SelfRequestAssembler 与上下文预算；
 - 相互独立的 SelfRuntime 与 AgentRuntime；
+- DelegateRequest 到受限 AgentTask 的 Application 验证网关；
+- Self-Agent 最小上下文防火墙；
+- 确定性的 ExecutionVerifier；
 - 一个只读工具和一个职责受限的子 Agent；
 - 审批、恢复和取消契约；
 - SQLite 会话事实存储；
@@ -103,6 +107,10 @@ Xiadie-next/
 │  ├─ application/
 │  │  └─ src/
 │  │     ├─ turn-service.ts
+│  │     ├─ delegate-validator.ts
+│  │     ├─ task-context-builder.ts
+│  │     ├─ self-request-assembler.ts
+│  │     ├─ execution-verifier.ts
 │  │     ├─ memory-policy.ts
 │  │     ├─ state-change-policy.ts
 │  │     ├─ runtime-policy.ts
@@ -185,9 +193,9 @@ interface ContextFragment {
 
 测试目标不是宣称能够绝对“防住 Prompt Injection”，而是验证不受信任上下文的隔离、降权和风险处理。
 
-### 5.3 ContextFrame 与 ContextBudgeter
+### 5.3 ContextFrame、PersonaCompiler 与请求分区
 
-Xiadie Core 必须先生成结构化上下文，再由唯一的 PersonaCompiler 渲染人格指令：
+Xiadie Core 必须先生成结构化上下文。`PersonaCompiler` 只编译版本化角色资产，不接收用户输入、工具输出、网页内容或 Agent 自述：
 
 ```ts
 interface XiadieContextFrame {
@@ -196,6 +204,13 @@ interface XiadieContextFrame {
   relationship: RelationshipState;
   memories: MemoryRecord[];
   scene: SceneContext;
+}
+
+interface CompiledPersona {
+  identity: ContextFragment[];
+  values: ContextFragment[];
+  boundaries: ContextFragment[];
+  voice: ContextFragment[];
 }
 ```
 
@@ -216,21 +231,52 @@ interface RuntimePolicy {
 
 **Prompt 永远不能授权。** Prompt 中描述“可以做什么”不等于 Runtime 实际允许执行。
 
-`ContextBudgeter` 按以下优先级分配模型上下文：
+Application 的 `SelfRequestAssembler` 将每轮模型输入组装为不可混淆的逻辑分区：
 
-```text
-P0  人格边界与核心身份
-P1  当前用户输入
-P1  已验证执行事实
-P2  Current Self 与 Relationship
-P3  当前相关长期记忆
-P4  Voice Examples
-P5  Scene 与补充 Canon
+```ts
+interface SelfRequest {
+  turnId: TurnId;
+  persona: CompiledPersona;
+  state: {
+    self: SelfState;
+    relationship: RelationshipState;
+  };
+  memories: MemoryRecord[];
+  turnInput: UserMessage;
+  evidence: VerifiedExecutionReport[];
+  capabilities: CapabilityAwareness;
+}
 ```
 
-超过预算时依次压缩或减少 P5、P4、P3；不得截断 P0，也不得丢弃当前用户输入或已验证执行事实。
+`PersonaCompiler` 决定“遐蝶是谁”；`SelfRequestAssembler` 决定“这一轮模型具体看到什么”。Assembler 必须使用模型 SDK 的独立消息或结构区域保持 PersonaInstructions、TrustedState、Memory、TurnInput、VerifiedEvidence 和 CapabilityAwareness 分区，不能把用户、工具或外部内容拼进人格指令。
 
-### 5.4 构建版本信息
+`ContextBudgeter` 使用分区预算，不把所有内容压成一个无类型字符串。v0.1 不实现复杂 token optimizer，但必须分别记录和限制以下预算：
+
+```ts
+interface ContextBudget {
+  persona: number;
+  state: number;
+  memories: number;
+  recentConversation: number;
+  evidence: number;
+}
+```
+
+裁剪优先级为：
+
+```text
+不可删除  人格边界、核心身份、当前用户输入、关键已验证证据
+可压缩    Current Self、Relationship、相关长期记忆
+优先裁剪  Voice Examples、旧会话、Scene 与补充 Canon
+```
+
+超过预算时不得截断人格边界、核心身份或当前用户输入，也不得丢弃支撑最终事实声明的关键已验证证据。
+
+### 5.4 v0.1 SelfState
+
+v0.1 的 `SelfState` 是只读 bootstrap 状态或空状态，不产生自动持久化变化，因此不引入 `SelfStore`。自传、Dream 或 Self 自动演化进入独立设计周期时，再定义 SelfStore、迁移与归因规则。
+
+### 5.5 构建版本信息
 
 每次 `PreparedTurn` 必须携带以下版本信息：
 
@@ -250,7 +296,7 @@ interface BuildMetadata {
 
 版本信息随会话记录保存，用于人格评测、问题定位和回滚。
 
-### 5.5 对外接口
+### 5.6 对外接口
 
 ```ts
 interface XiadieKernel {
@@ -275,13 +321,15 @@ interface VerifiedTurnRecord {
   conversationId: string;
   userMessage: MessageRef;
   finalResponse: MessageRef;
-  execution?: {
-    runId: string;
-    status: "success" | "partial" | "failed";
-    evidence: EvidenceRef[];
-  };
+  executions: VerifiedExecutionRef[];
   timestamp: number;
   build: BuildMetadata;
+}
+
+interface VerifiedExecutionRef {
+  runId: string;
+  status: "success" | "partial" | "failed";
+  evidence: EvidenceRef[];
 }
 
 interface CommittedTurnRecord extends VerifiedTurnRecord {
@@ -298,6 +346,8 @@ interface ObservationResult {
 `observeTurn` 只接收已经写入 ConversationStore 的 `CommittedTurnRecord`，并且只返回候选变化。Core 不调用 `MemoryProvider`，不更新 Relationship 数据库，也不开启持久化事务。Application 负责对候选执行 Policy、验证和幂等提交。
 
 Core 不能根据 Agent 的自然语言自述判断任务是否完成。Memory、Relationship 和未来的 Dream 都只能从已经提交的会话事实产生。
+
+v0.1 的 RuntimePolicy 每个 `turnId` 最多接受一次顶层 `DelegateRequest`，但 `executions` 从第一版起使用数组：无执行为 `[]`，一次执行为单元素数组。AgentRuntime 内部仍可调用多个工具和受限子 Agent；以后开放多次顶层委托时不需要迁移会话 schema。
 
 Xiadie Core 禁止依赖 Mastra、Electron、具体模型 SDK 或具体存储实现。
 
@@ -366,7 +416,44 @@ type SelfEvent =
 
 `self.text.delta` 只用于 UI 流式显示，是尚未提交的临时草稿。只有 `self.final` 能成为 `FinalResponse` 并进入 ConversationStore；失败或取消时，未完成的 delta 不得保存为正式人格历史。
 
-### 6.2 AgentRuntime
+### 6.2 Delegate 验证与上下文防火墙
+
+`DelegateRequest` 是 Self 模型表达的执行意图，不具备授权效力：
+
+```ts
+interface DelegateRequest {
+  goal: string;
+  taskType: string;
+  requestedCapabilities?: string[];
+  contextRefs?: string[];
+}
+
+interface TaskContext {
+  goal: string;
+  relevantFacts: TaskFact[];
+  artifacts: ArtifactRef[];
+  constraints: string[];
+}
+
+interface AgentTask {
+  turnId: TurnId;
+  taskId: string;
+  goal: string;
+  scope: ValidatedTaskScope;
+  allowedTools: string[];
+  workspace?: ValidatedWorkspace;
+  context: TaskContext;
+  inputs: TaskInput[];
+}
+```
+
+Application 必须先对 DelegateRequest 执行严格 schema validation，再依据 RuntimePolicy、WorkspacePolicy、能力注册表和审批规则进行验证，最后才能构建 `AgentTask`。未知字段、越权路径、未注册能力和超出 Policy 的请求一律拒绝；`requestedCapabilities` 只能缩小权限，不能扩大权限。验证失败时返回结构化拒绝结果给 SelfRuntime，不得调用 AgentRuntime。
+
+AgentRuntime 只能接受 Application 构建的 `AgentTask`，不能直接接受 DelegateRequest、Prompt 文本或任意模型 JSON。
+
+`TaskContextBuilder` 遵循最小上下文原则。默认禁止向 AgentRuntime 转发完整 Persona、Relationship、SelfState、无关长期记忆和 Self 私有上下文；只允许任务目标、必要事实、工件引用、约束和已验证输入。v0.1 的工作区检查任务不允许任何 Persona 或私人状态进入 AgentTask。
+
+### 6.3 AgentRuntime
 
 AgentRuntime 负责执行任务：
 
@@ -398,7 +485,7 @@ interface RunHandle {
 - 可持久化的运行检查点；
 - 审批、恢复、取消和失败处理。
 
-### 6.3 可审计 RuntimeEvent
+### 6.4 可审计 RuntimeEvent
 
 所有运行事件具有稳定标识、顺序和时间：
 
@@ -433,7 +520,19 @@ run.cancelled
 
 `run.completed`、`run.failed` 和 `run.cancelled` 是互斥的终止状态。进入终止状态后的迟到事件不得改变运行结论；Adapter 必须忽略并记录异常。`resume`、`cancel` 和审批决定必须幂等，重复请求不能重复执行动作或生成第二个终止结果。
 
-`VerifiedExecutionReport` 必须由事件序列和工具结果生成。没有 `tool.completed` 或 `run.completed` 等对应成功证据时，SelfRuntime 不得产生成功声明。
+### 6.5 ExecutionVerifier
+
+AgentRuntime 只能产出 `RuntimeEvent`、原始 `ToolResult` 和 `EvidenceCandidate`，无权自行生成或声明 `VerifiedExecutionReport`。Application 中的确定性 `ExecutionVerifier` 独占验证权：
+
+```ts
+interface ExecutionVerifier {
+  verify(run: RuntimeRunRecord): VerifiedExecutionReport;
+}
+```
+
+Verifier 必须校验事件顺序、operationId、工具结果、EvidenceCandidate、审批状态和互斥终止状态。通过验证的 EvidenceCandidate 才能被提升为 `ExecutionEvidence` 并写入报告；Agent 的自然语言总结只能作为不受信任内容，不能决定 `status`。缺少成功终止事件、工具失败或证据无法对应时，Verifier 只能返回 `partial` 或 `failed`。
+
+`VerifiedExecutionReport` 只能由 ExecutionVerifier 根据事件序列和执行证据生成。没有 `tool.completed` 或 `run.completed` 等对应成功证据时，SelfRuntime 不得产生成功声明。
 
 ## 7. Conversation、Memory 与 Mastra Thread
 
@@ -468,6 +567,8 @@ ConversationStore 保存：
 `ConversationStore.commit(record)` 以 `turnId` 为幂等键：相同 `turnId` 和相同内容的重复提交返回原有 `CommittedTurnRecord`；相同 `turnId` 但内容不同必须报冲突，不得覆盖。只有 commit 成功后，该轮内容才成为会话事实。
 
 ConversationStore 是恢复会话、审计事实和重建 Mastra 上下文的唯一依据。Mastra Thread 与 ConversationStore 冲突时，以 ConversationStore 中已经提交的事实为准。
+
+ToolEvent、AgentEvent 和 ApprovalEvent 只在整轮 commit 时以规范化记录或引用进入 ConversationStore；未完成运行的原始事件流由 RuntimeCheckpointStore 保存，不要求实时写成正式会话事实。
 
 ### 7.2 MemoryProvider
 
@@ -531,6 +632,12 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 - v0.1 不承诺跨大版本自动降级；旧应用不得直接写入新 schema。
 - RuntimeCheckpoint 可以丢弃后重建；ConversationStore、MemoryProvider 和 RelationshipStore 的备份、恢复与迁移必须分别验证。
 
+### 7.5 RuntimeCheckpoint 与未完成运行
+
+RuntimeCheckpoint 是未完成运行的临时操作状态，可以在 `FinalResponse` 和 `CommittedTurnRecord` 产生前保存，例如等待审批、工具进行中和恢复游标。它不是已提交的会话事实，不能直接产生 Memory、Relationship 或未来 Dream。
+
+运行进入终止状态后，Application 先通过 ExecutionVerifier 构建 `VerifiedExecutionReport`，再由 SelfRuntime 形成 `FinalResponse` 并提交 ConversationStore。commit 成功后，对应 Checkpoint 必须幂等地删除或标记 terminal；若应用在中途退出，只能从 Checkpoint 恢复或明确终止，不能把未完成事件伪装成已提交会话。
+
 ## 8. 单轮交互数据流
 
 ```text
@@ -543,9 +650,11 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
          XiadieKernel.prepareTurn()
                      │
                      ▼
-               ContextFrame
+       ContextFrame + PersonaCompiler
                      │
-              PersonaCompiler
+                     ▼
+             SelfRequestAssembler
+   Persona / State / Memory / Input 分区
                      │
                      ▼
                  SelfRuntime
@@ -558,6 +667,12 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
      FinalResponse             DelegateRequest
           │                          │
           │                          ▼
+          │          DelegateValidator + RuntimePolicy
+          │                          │
+          │                          ▼
+          │             AgentTask + 最小 TaskContext
+          │                          │
+          │                          ▼
           │                     AgentRuntime
           │                          │
           │              ┌───────────┼───────────┐
@@ -566,7 +681,16 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
           │              │           │           │
           │              └───────────┼───────────┘
           │                          ▼
+          │                    RuntimeRunRecord
+          │                          │
+          │                          ▼
+          │                  ExecutionVerifier
+          │                          │
+          │                          ▼
           │                 VerifiedExecutionReport
+          │                          │
+          │                          ▼
+          │             SelfRequestAssembler
           │                          │
           │                          ▼
           │                     SelfRuntime
@@ -599,7 +723,7 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 
 整条链路共享同一个 `turnId`。必须先提交 Conversation，再观察和派生 Memory/Relationship；派生写入失败可以安全重试，但不得反向伪造或提前创建会话事实。
 
-工具过程可以通过中性执行卡片展示，但底层轨迹不能伪装成遐蝶台词。SelfRuntime 只读取结构化委托请求、能力说明和经过验证的执行报告，不读取无界的原始日志作为人格指令。
+DelegateRequest 不能绕过 Application 进入 AgentRuntime，RuntimeRunRecord 也不能绕过 ExecutionVerifier 回到 SelfRuntime。工具过程可以通过中性执行卡片展示，但底层轨迹不能伪装成遐蝶台词。SelfRuntime 只读取分区后的请求、能力说明和经过验证的执行报告，不读取无界原始日志作为人格指令。
 
 ## 9. 失败处理与安全边界
 
@@ -653,6 +777,16 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 - `self.text.delta` 不进入会话事实，取消后的半句不被提交；
 - 执行失败、部分完成和取消时保持诚实表达。
 
+### Application 契约测试
+
+- DelegateRequest 不能直接传给 AgentRuntime；
+- schema 非法、越权能力、未注册工具和越界工作区请求均被拒绝；
+- requestedCapabilities 不能扩大 RuntimePolicy；
+- AgentTask 只包含最小 TaskContext，不泄露 Persona、Relationship、SelfState 或无关记忆；
+- SelfRequestAssembler 保持 Persona、State、Memory、User Input、Evidence 和 Capability 分区；
+- ExecutionVerifier 独占 VerifiedExecutionReport 构建权，并拒绝 Agent 自证成功；
+- v0.1 每个 turn 最多接受一次顶层委托，VerifiedTurnRecord 使用 executions 数组。
+
 ### AgentRuntime 测试
 
 - 只读工具执行；
@@ -662,7 +796,7 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 - 取消、Provider 失败和工具失败；
 - RuntimeEvent 的顺序、幂等和审计字段；
 - 终止状态互斥，迟到事件不能改写结论；
-- 没有成功事件时不能生成成功的 VerifiedExecutionReport。
+- AgentRuntime 只返回事件、工具结果和 EvidenceCandidate，不生成 VerifiedExecutionReport。
 
 ### Persistence 测试
 
@@ -672,7 +806,9 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 - MemoryProvider 不保存完整聊天副本；
 - Mastra Thread 丢失后可从已提交事实重建必要上下文；
 - 重启后恢复会话和等待审批的运行；
-- 记忆删除、替代和来源追溯。
+- 未完成 RuntimeCheckpoint 不被当作 CommittedTurnRecord 或长期记忆；
+- commit 成功后对应 Checkpoint 被幂等删除或标记 terminal；
+- 记忆删除、替代和来源追溯；
 - 四类 schema 的升级、失败回滚、迁移前备份和未来版本拒绝写入。
 
 ### 产品测试
@@ -705,44 +841,53 @@ MemOS 始终只是 `MemoryProvider` 的一种适配器，不能成为 Xiadie Cor
 3. SelfRuntime 与 AgentRuntime 在代码、权限和测试上明确分离；
 4. 用户能够完成不使用工具的普通对话；
 5. SelfRuntime 能发出 DelegateRequest，但不能直接调用执行工具；
-6. 用户能够请求受限工作区检查，并看到真实执行证据；
-7. 主执行 Agent 能够把一个受限任务委托给专业子 Agent；
-8. 工具细节与遐蝶最终表达保持分离；
-9. 审批允许、拒绝、恢复和取消都具有可验证行为；
-10. ConversationStore、MemoryProvider 和 Mastra Thread 不互相冒充；
-11. 一轮交互的消息、Self/Agent 运行、证据、提交记录和记忆候选可通过同一 `turnId` 追溯；
-12. 只有 ConversationStore commit 成功后的 CommittedTurnRecord 能产生 Memory 或 Relationship 变化；
-13. Core 只返回候选状态变化，不直接写入任何持久化 Provider；
-14. 重复 resume、cancel、commit 和 memory write 不会产生重复副作用；
-15. Self 流式草稿不会被当作正式会话事实保存；
-16. 运行暂停、恢复和互斥终止状态具有完整事件证据；
-17. 应用重启后能够恢复会话，等待审批的运行不会秘密继续；
-18. 不支持的未来 schema 被安全拒绝，迁移失败可从备份恢复；
-19. 没有对应成功事件时，最终回复不得声称任务成功；
-20. 两个模型上的固定人格评测通过约定阈值；
-21. 自动化测试和生产构建全部通过；
-22. 旧 Xiadie 和 Cyrene 工作区没有发生变化。
+6. 每个 DelegateRequest 都经 Application 验证并转换为受限 AgentTask；
+7. AgentTask 只包含任务所需的最小上下文，不携带完整人格或私人状态；
+8. 用户能够请求受限工作区检查，并看到真实执行证据；
+9. 主执行 Agent 能够把一个受限任务委托给专业子 Agent；
+10. VerifiedExecutionReport 只能由确定性 ExecutionVerifier 构建；
+11. Persona、State、Memory、User Input、Evidence 和 Capability 在 SelfRequest 中保持逻辑分区；
+12. 工具细节与遐蝶最终表达保持分离；
+13. 审批允许、拒绝、恢复和取消都具有可验证行为；
+14. ConversationStore、MemoryProvider 和 Mastra Thread 不互相冒充；
+15. 一轮交互的消息、Self/Agent 运行、证据、提交记录和记忆候选可通过同一 `turnId` 追溯；
+16. VerifiedTurnRecord 使用 executions 数组，v0.1 每轮最多一次顶层委托；
+17. 只有 ConversationStore commit 成功后的 CommittedTurnRecord 能产生 Memory 或 Relationship 变化；
+18. Core 只返回候选状态变化，不直接写入任何持久化 Provider；
+19. v0.1 SelfState 不自动持久化，也不引入 SelfStore；
+20. 重复 resume、cancel、commit 和 memory write 不会产生重复副作用；
+21. Self 流式草稿不会被当作正式会话事实保存；
+22. 运行暂停、恢复和互斥终止状态具有完整事件证据；
+23. 未完成 Checkpoint 不进入正式会话或长期记忆，commit 后被清理或标记 terminal；
+24. 应用重启后能够恢复会话，等待审批的运行不会秘密继续；
+25. 不支持的未来 schema 被安全拒绝，迁移失败可从备份恢复；
+26. 没有对应成功事件时，最终回复不得声称任务成功；
+27. 两个模型上的固定人格评测通过约定阈值；
+28. 自动化测试和生产构建全部通过；
+29. 旧 Xiadie 和 Cyrene 工作区没有发生变化。
 
 ## 13. 交付顺序
 
 1. 初始化 TypeScript Monorepo、精确依赖锁定和质量门禁。
 2. 添加根目录 `ARCHITECTURE.md` 和可自动检查的依赖边界。
 3. 将现有人格文字拆分为版本化、不可由模型修改的角色资产。
-4. 实现 ContextFragment、ContextFrame、ContextBudgeter 和 PersonaCompiler。
+4. 实现 ContextFragment、ContextFrame、分区 ContextBudgeter 和 PersonaCompiler。
 5. 实现带 `turnId` 和幂等 commit 的 ConversationStore、CommittedTurnRecord 以及四类 schema 迁移骨架。
 6. 实现无持久化副作用的 Core ObservationResult、最小 MemoryProvider 和 RelationshipStore 提交流程。
-7. 实现 SelfRuntime、SelfEvent 及其 Mastra 适配器，不注册执行工具。
-8. 实现 AgentRuntime、RuntimeEvent、暂停/恢复与互斥终止状态，以及一个工具和一个子 Agent。
-9. 实现 TurnService，将直接回答、委托执行、会话提交和派生状态提交顺序闭合。
-10. 实现最小桌面聊天、Self 流式输出、执行事件和审批界面。
-11. 运行跨模型人格评测并修正人格或边界缺陷。
-12. 打包并冒烟测试 Windows 概念验证版本。
+7. 实现 SelfRequestAssembler、SelfRuntime 和 SelfEvent，不注册执行工具。
+8. 实现 DelegateValidator、TaskContextBuilder 和 RuntimePolicy 到 AgentTask 的转换。
+9. 实现 AgentRuntime、RuntimeEvent、暂停/恢复与互斥终止状态，以及一个工具和一个子 Agent。
+10. 实现 ExecutionVerifier，确保 AgentRuntime 不能自行生成 VerifiedExecutionReport。
+11. 实现 TurnService，将直接回答、受控委托、执行验证、会话提交和派生状态提交顺序闭合。
+12. 实现最小桌面聊天、Self 流式输出、执行事件和审批界面。
+13. 运行跨模型人格评测并修正人格或边界缺陷。
+14. 打包并冒烟测试 Windows 概念验证版本。
 
 只有以上基础通过验收后，才开始 Dream、关系演化、MemOS、Live2D 和语音功能。
 
 ## 14. 架构冻结规则
 
-本规格经用户最终确认后标记为 **Foundation Architecture v1**。冻结后只接受以下变更：
+本规格已经标记为 **Foundation Architecture v1 — FROZEN**。冻结后只接受以下变更：
 
 - 修复与既定目标冲突的缺陷；
 - 补全无法实施或无法测试的契约；
