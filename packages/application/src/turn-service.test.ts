@@ -239,6 +239,43 @@ const createService = ({
 });
 
 describe("TurnService", () => {
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+    ["fractional", 1.5],
+    ["above maximum", 10_001],
+  ])("rejects an invalid %s history capacity", (_label, historyCapacity) => {
+    expect(() =>
+      createService({
+        self: new ScriptedSelf([]),
+        historyCapacity,
+      }),
+    ).toThrowError("turn_history_capacity_invalid");
+  });
+
+  it("allows zero history capacity and relies on committed-turn guards", async () => {
+    const ids = [turnId, turnId];
+    const self = new ScriptedSelf([[started(), final("answer")]]);
+    const setup = createService({
+      self,
+      historyCapacity: 0,
+      createTurnId: () => {
+        const next = ids.shift();
+        if (next === undefined) throw new Error("unexpected_turn_id_request");
+        return next;
+      },
+    });
+    const input = { conversationId: "conversation-1", userMessage: "hello" };
+    await setup.service.run(input);
+
+    await expect(setup.service.run({ ...input })).rejects.toThrowError(
+      "turn_already_committed",
+    );
+
+    expect(self.requests).toHaveLength(1);
+  });
+
   it("commits a direct final answer with an empty executions array", async () => {
     const self = new ScriptedSelf([[started(), final("direct answer")]]);
     const setup = createService({ self });
@@ -334,6 +371,8 @@ describe("TurnService", () => {
   it("single-flights concurrent calls for the same turn input", async () => {
     const runGate = deferred<RuntimeRunRecord>();
     const agentStarted = deferred<void>();
+    let initialAttempts = 0;
+    let factoryUnavailable = false;
     const agent = new RecordingAgent(async () => {
       agentStarted.resolve(undefined);
       return runGate.promise;
@@ -342,11 +381,20 @@ describe("TurnService", () => {
       [started(), delegate()],
       [started(1, { runId: "self-run-2" }), final("done", 2, "self-run-2")],
     ]);
-    const setup = createService({ self, agent });
+    const setup = createService({
+      self,
+      agent,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        if (factoryUnavailable) throw new Error("initial_factory_unavailable");
+        return createRequest(id, userMessage);
+      },
+    });
     const input = { conversationId: "conversation-1", userMessage: "inspect" };
 
     const first = setup.service.run(input);
     await agentStarted.promise;
+    factoryUnavailable = true;
     const concurrent = setup.service.run({ ...input });
     const sharedPromise = concurrent === first;
     runGate.resolve(successfulRun(turnId));
@@ -361,21 +409,37 @@ describe("TurnService", () => {
     expect(outcomes[1].value).toBe(outcomes[0].value);
     expect(self.requests).toHaveLength(2);
     expect(agent.tasks).toHaveLength(1);
+    expect(initialAttempts).toBe(1);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
   });
 
   it("returns the cached promise and result for a delayed identical retry", async () => {
+    let initialAttempts = 0;
+    let forgeInitial = false;
     const self = new ScriptedSelf([[started(), final("cached answer")]]);
-    const setup = createService({ self });
+    const setup = createService({
+      self,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        const request = createRequest(id, userMessage);
+        if (!forgeInitial) return request;
+        return {
+          ...request,
+          turnInput: { ...request.turnInput, id: "forged-after-completion" },
+        };
+      },
+    });
     const input = { conversationId: "conversation-1", userMessage: "hello" };
     const first = setup.service.run(input);
     const firstResult = await first;
 
+    forgeInitial = true;
     const retried = setup.service.run({ ...input });
     const retriedResult = await retried;
 
     expect(retried).toBe(first);
     expect(retriedResult).toBe(firstResult);
+    expect(initialAttempts).toBe(1);
     expect(self.requests).toHaveLength(1);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
   });
@@ -383,6 +447,8 @@ describe("TurnService", () => {
   it("removes a settled flight and refuses to replay an evicted committed turn", async () => {
     const turn2 = asTurnId("turn-2");
     const ids = [turnId, turn2, turnId];
+    let initialAttempts = 0;
+    let factoryUnavailable = false;
     const self = new ScriptedSelf([
       [started(), final("first answer")],
       [
@@ -396,6 +462,11 @@ describe("TurnService", () => {
     const setup = createService({
       self,
       historyCapacity: 1,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        if (factoryUnavailable) throw new Error("initial_factory_unavailable");
+        return createRequest(id, userMessage);
+      },
       createTurnId: () => {
         const next = ids.shift();
         if (next === undefined) throw new Error("unexpected_turn_id_request");
@@ -406,10 +477,12 @@ describe("TurnService", () => {
     await setup.service.run(firstInput);
     await setup.service.run({ conversationId: "conversation-2", userMessage: "second" });
 
+    factoryUnavailable = true;
     await expect(setup.service.run({ ...firstInput })).rejects.toThrowError(
       "turn_already_committed",
     );
 
+    expect(initialAttempts).toBe(2);
     expect(self.requests).toHaveLength(2);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(2);
   });
@@ -457,6 +530,8 @@ describe("TurnService", () => {
   it("refuses to replay an evicted failed attempt that retains a checkpoint", async () => {
     const turn2 = asTurnId("turn-2");
     const ids = [turnId, turn2, turnId];
+    let initialAttempts = 0;
+    let forgeInitial = false;
     const self = new ScriptedSelf([
       [started(), delegate()],
       [
@@ -471,6 +546,15 @@ describe("TurnService", () => {
       self,
       agent,
       historyCapacity: 1,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        const request = createRequest(id, userMessage);
+        if (!forgeInitial) return request;
+        return {
+          ...request,
+          turnInput: { ...request.turnInput, id: "forged-after-eviction" },
+        };
+      },
       createTurnId: () => {
         const next = ids.shift();
         if (next === undefined) throw new Error("unexpected_turn_id_request");
@@ -481,10 +565,12 @@ describe("TurnService", () => {
     await expect(setup.service.run(failedInput)).rejects.toThrowError("agent_unavailable");
     await setup.service.run({ conversationId: "conversation-2", userMessage: "second" });
 
+    forgeInitial = true;
     await expect(setup.service.run({ ...failedInput })).rejects.toThrowError(
       "turn_recovery_required",
     );
 
+    expect(initialAttempts).toBe(2);
     expect(self.requests).toHaveLength(2);
     expect(agent.tasks).toHaveLength(1);
     expect(setup.checkpoints.has(turnId)).toBe(true);
@@ -494,17 +580,28 @@ describe("TurnService", () => {
     ["message", { conversationId: "conversation-1", userMessage: "different" }],
     ["conversation", { conversationId: "conversation-2", userMessage: "hello" }],
   ] as const)("rejects a conflicting %s for a reused turn ID", async (_field, conflictInput) => {
+    let initialAttempts = 0;
+    let factoryUnavailable = false;
     const self = new ScriptedSelf([[started(), final("answer")]]);
-    const setup = createService({ self });
+    const setup = createService({
+      self,
+      createInitialRequest: (id, userMessage) => {
+        initialAttempts += 1;
+        if (factoryUnavailable) throw new Error("initial_factory_unavailable");
+        return createRequest(id, userMessage);
+      },
+    });
     await setup.service.run({
       conversationId: "conversation-1",
       userMessage: "hello",
     });
 
+    factoryUnavailable = true;
     await expect(setup.service.run(conflictInput)).rejects.toThrowError(
       "turn_run_conflict",
     );
 
+    expect(initialAttempts).toBe(1);
     expect(self.requests).toHaveLength(1);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
   });
