@@ -6,7 +6,7 @@
 
 **架构基线：** Foundation Architecture v1
 
-**目标版本：** Character Asset Schema 1 / Xiadie Persona 1.0.0
+**目标版本：** Character Asset Schema 1 / Xiadie Character 1.0.0
 
 ## 1. 背景
 
@@ -42,7 +42,7 @@ Persona + 非注入参考资料 + 可追溯元数据
 3. 通过 Application 层 Loader 安全读取、规范化并校验本地角色资产。
 4. 通过 Core 层纯函数编译出符合现有信任分区的 `CompiledPersona`。
 5. 保留 canon 与 examples，但阻止它们无界进入常驻人格指令。
-6. 为每次编译产生稳定的 Persona 版本、资产哈希和章节追溯信息。
+6. 为每次编译产生稳定的 Character 版本、完整资产哈希、人格指令哈希和章节追溯信息。
 7. 建立静态人格评测集，为下一阶段真实 SelfRuntime 的跨模型评测准备输入。
 8. 明确 MIT 代码许可与第三方角色知识产权的范围。
 
@@ -230,7 +230,7 @@ examples.md
   examples.anti_patterns
 ```
 
-Manifest 声明每个文件的精确 `sections` 数组。解析结果必须与声明的集合和顺序完全一致；缺失、重复、额外或乱序章节均失败。正文不得为空。
+Manifest 声明每个文件的精确 `sections` 数组，但 Manifest 不是 Schema 1 的规则来源。Schema 1 在 Core 常量中固定 kind、path、文件顺序和章节顺序；Manifest 与 Markdown 必须分别匹配同一 canonical contract。二者即使一起写错也必须被拒绝。正文不得为空。
 
 ## 10. Manifest 合同
 
@@ -253,16 +253,46 @@ export interface CharacterAssetManifestFile {
 export interface CharacterAssetManifest {
   readonly schemaVersion: 1;
   readonly characterId: "xiadie";
-  readonly personaVersion: string;
+  readonly characterVersion: string;
   readonly files: readonly CharacterAssetManifestFile[];
 }
 ```
 
 Manifest 使用严格 schema：拒绝未知顶层字段、未知文件字段、重复 kind、重复 path、未知 kind 和不完整的六文件集合。
 
-`personaVersion` 必须是无前缀的 SemVer 字符串；本阶段资产固定为 `1.0.0`。类型允许后续新版本由同一 Schema 1 Loader 读取，但不得在运行时自动选择或升级版本。
+Schema 1 的 canonical contract 固定为：
 
-`path` 只能是同级小写文件名，匹配 `[a-z][a-z0-9_-]*.md`。禁止绝对路径、目录分隔符、`..`、URL 和驱动器前缀。
+```ts
+export const CHARACTER_ASSET_ORDER = [
+  "identity",
+  "values",
+  "boundaries",
+  "voice",
+  "canon",
+  "examples",
+] as const;
+
+export const CHARACTER_ASSET_PATHS = {
+  identity: "identity.md",
+  values: "values.md",
+  boundaries: "boundaries.md",
+  voice: "voice.md",
+  canon: "canon.md",
+  examples: "examples.md",
+} as const;
+```
+
+`CHARACTER_ASSET_SECTIONS` 同样由 Core 固定为第 9 节列出的六组章节。Manifest 的 `files` 必须严格按 `CHARACTER_ASSET_ORDER` 排列，每个 kind 的 path 必须等于 `CHARACTER_ASSET_PATHS[kind]`，sections 必须与 `CHARACTER_ASSET_SECTIONS[kind]` 深度相等。Loader 和 Compiler 都不得使用 Manifest 自行定义顺序、路径或章节合同。
+
+`characterVersion` 必须是无前缀的 SemVer 字符串；本阶段资产固定为 `1.0.0`。它表示整个 Xiadie Character Asset Release 的人类可读语义版本，包括常驻 Persona、canon 和 examples。类型允许后续新版本由同一 Schema 1 Loader 读取，但不得在运行时自动选择或升级版本。
+
+### 10.1 Character SemVer 规则
+
+- **PATCH**：修正错字、消除不改变含义的重复、澄清措辞或格式；不得新增、删除或反转人格语义。
+- **MINOR**：在同一身份、核心价值和关系模型下新增人格细节、canon、正反例、voice 特征或更严格的表达边界。
+- **MAJOR**：改变核心身份、用户默认关系、核心价值、事实/现实边界，反转重要人格规则，或对同一输入产生有意的不兼容人格行为。
+
+Schema 版本与 Character 版本彼此独立。Markdown 语法、Manifest 结构或 canonical contract 的不兼容改变提升 `schemaVersion`；内容语义改变提升 `characterVersion`。任一资产正文改变都会改变精确哈希，即使改动只需要 PATCH。
 
 ## 11. CharacterAssetLoader
 
@@ -274,7 +304,7 @@ Loader 位于 Application 层，职责仅限受控文件 I/O、规范化和完�
 4. 使用严格 UTF-8 解码；拒绝非法字节和 NUL 字符。
 5. 去除单个 UTF-8 BOM，将 CRLF 和 CR 统一为 LF；不静默删除其他空白。
 6. 以规范化后的 UTF-8 内容计算 SHA-256，并与 manifest 小写十六进制值比较。
-7. 按 manifest 文件顺序返回不可变快照。
+7. 按 `CHARACTER_ASSET_ORDER` 返回不可变快照；Manifest 数组顺序只能被验证，不能控制返回顺序。
 8. 用 manifest 的 canonical JSON 和六个已验证文件哈希计算整体 `assetHash`。
 
 Loader 返回以下不可变快照：
@@ -295,7 +325,7 @@ export interface LoadedCharacterAssets {
 }
 ```
 
-canonical JSON 由 Loader 重新构造，不使用输入 JSON 的属性顺序或空白：顶层键固定为 `schemaVersion`、`characterId`、`personaVersion`、`files`；文件键固定为 `kind`、`path`、`sha256`、`sections`；数组顺序保持 manifest 已验证顺序。`assetHash` 是该 UTF-8 JSON、一个 LF 分隔符以及六个文件规范化哈希按顺序连接后的 SHA-256。
+canonical JSON 由 Loader 重新构造，不使用输入 JSON 的属性顺序或空白：顶层键固定为 `schemaVersion`、`characterId`、`characterVersion`、`files`；文件键固定为 `kind`、`path`、`sha256`、`sections`；数组顺序固定为 `CHARACTER_ASSET_ORDER`。`assetHash` 是该 UTF-8 JSON、一个 LF 分隔符以及六个文件规范化哈希按 canonical 顺序连接后的 SHA-256。
 
 大小限制：
 
@@ -308,16 +338,27 @@ Loader 返回的对象必须深层冻结或复制到不可被调用方后续修�
 
 ## 12. PersonaCompiler
 
-PersonaCompiler 位于 `xiadie-core`，是无 I/O、无副作用的纯函数。它接收 Loader 已规范化的资产快照，验证 Markdown 结构和章节合同，然后按 manifest 顺序生成编译结果。
+PersonaCompiler 位于 `xiadie-core`，是无 I/O、无副作用的纯函数。它接收 Loader 已规范化的资产快照，分别对 Manifest 和 Markdown 验证 Schema 1 canonical contract，然后只按 Core 固定顺序生成编译结果。
+
+同步 SHA-256 使用精确锁定的 `@noble/hashes` `2.2.0`，从 `@noble/hashes/sha2.js` 导入 `sha256`，从 `@noble/hashes/utils.js` 导入 `utf8ToBytes` 与 `bytesToHex`。该依赖是 ESM-only 的纯 JavaScript 哈希实现，不把 Node 内置模块或异步 WebCrypto 引入 Core。官方 API：<https://www.npmjs.com/package/@noble/hashes>。
 
 ```ts
-export interface CharacterPersonaFragment extends PersonaInstructionFragment {
+export type PersonaSectionPriority = "required" | "contextual" | "optional";
+
+export interface PersonaInstructionFragment extends ContextFragment {
   readonly sectionId: string;
+  readonly priority: PersonaSectionPriority;
+  readonly source: "character";
+  readonly trust: "core";
+  readonly purpose: "instruction";
 }
+
+export type CharacterPersonaFragment = PersonaInstructionFragment;
 
 export interface CharacterReferenceFragment {
   readonly sectionId: string;
   readonly kind: "canon" | "examples";
+  readonly referenceRole: "canon" | "positive_example" | "negative_example";
   readonly content: string;
   readonly source: "character";
   readonly trust: "core";
@@ -337,8 +378,9 @@ export interface CompiledCharacter {
   };
   readonly metadata: {
     readonly characterId: "xiadie";
-  readonly personaVersion: string;
+    readonly characterVersion: string;
     readonly assetHash: string;
+    readonly instructionHash: string;
     readonly sectionIds: readonly string[];
   };
 }
@@ -368,20 +410,117 @@ canon/examples 固定映射为：
 }
 ```
 
+`priority` 和 `referenceRole` 都由 Core 固定映射生成，Markdown 与 Manifest 不能声明或覆盖：
+
+```ts
+export const PERSONA_SECTION_POLICY = {
+  "identity.self": "required",
+  "identity.continuity": "required",
+  "identity.user_relationship": "required",
+  "identity.capability": "required",
+  "values.life": "required",
+  "values.compassion": "required",
+  "values.independence": "required",
+  "values.growth": "required",
+  "values.work": "required",
+  "boundaries.relationship": "required",
+  "boundaries.reality": "required",
+  "boundaries.evidence": "required",
+  "boundaries.permissions": "required",
+  "boundaries.immersion": "required",
+  "voice.baseline": "required",
+  "voice.address": "optional",
+  "voice.emotion": "optional",
+  "voice.work": "contextual",
+  "voice.avoid": "required",
+} as const;
+
+export const CHARACTER_REFERENCE_ROLE = {
+  "canon.origin": "canon",
+  "canon.journey": "canon",
+  "canon.present": "canon",
+  "canon.interests": "canon",
+  "canon.relationships": "canon",
+  "canon.symbols": "canon",
+  "examples.daily": "positive_example",
+  "examples.work": "positive_example",
+  "examples.disagreement": "positive_example",
+  "examples.support": "positive_example",
+  "examples.boundary": "positive_example",
+  "examples.anti_patterns": "negative_example",
+} as const;
+```
+
+`instructionHash` 表示未经本轮预算裁剪的完整编译 Persona。其输入是按 canonical 顺序排列的 identity、values、boundaries、voice 片段，并对每个片段按固定键顺序序列化 `sectionId`、`priority`、`source`、`trust`、`purpose`、`content` 后计算 SHA-256。canon、examples 和 Manifest 非指令元数据不进入该哈希。
+
 Compiler 不解释用户输入，不根据对话动态改变人格，不读取 Relationship、Memory、工具输出或外部文档。它也不根据模型自行压缩、改写或补全人格文本。
 
-Markdown 解析器只把代码围栏之外、整行匹配 `## <section-id>` 的二级标题视为章节边界。一级标题必须恰好一个；未闭合代码围栏、额外一级标题和不符合 ID 语法的二级标题均视为 `character_document_invalid`。三级及更深标题保留在当前章节正文中。
+### 12.1 Schema 1 Markdown Grammar
+
+Schema 1 使用项目自有的极小逐行状态机，不引入通用 Markdown AST Parser。Loader 已先将换行规范化为 LF；Compiler 再执行以下唯一语法：
+
+````text
+一级标题     ^# \S(?:.*\S)?$
+章节标题     ^## ([a-z][a-z0-9]*(?:[._][a-z0-9]+)*)$
+代码围栏开头 ^(```|~~~)([A-Za-z0-9_-]+)?$
+代码围栏结尾 必须与开头使用相同的三个字符，且整行只有围栏
+````
+
+- 前导空格、标题尾部空格和标题中的 tab 均不允许。围栏外以四个或更多反引号/波浪号开头的 fence candidate 视为非法；围栏内普通代码内容不受此条限制。
+- 第一条非空行必须是唯一一级标题；一级标题前不得有正文，一级标题与首个章节之间只能有空行。
+- 代码围栏不能嵌套，必须闭合；开头可直接附加一个无空格的 ASCII language tag，例如三个反引号后紧接 `ts`，结尾只能是同种三个围栏字符。
+- 围栏内看似标题的文本按正文处理。围栏外任何以 `# ` 或 `## ` 开头但不匹配上述语法的行均失败。
+- 三级及更深标题没有结构语义，原样保留在当前章节正文。
+- 每个章节收集到下一章节前；只移除章节正文开头和结尾的空行，不修改内部空行或其他字符，随后以 LF 连接。
+- 空章节、未闭合围栏、额外一级标题和非法章节 ID 均为 `character_document_invalid` 或 `character_section_empty`。
 
 ## 13. 与现有 Foundation 契约的集成
 
 - `CompiledCharacter.persona` 结构兼容现有 `CompiledPersona`，由 `SelfRequestAssembler` 继续放入 Persona 分区。
-- 每个二级章节编译成独立片段，现有 `ContextBudgeter` 可以按固定顺序裁剪 voice 片段；核心 identity、values 和 boundaries 不在本阶段新增动态裁剪。
-- `BuildMetadata.characterVersion` 写入 `personaVersion`。
+- 现有 `PersonaInstructionFragment` 基础合同增加必需的 `sectionId` 与 `priority`；`SelfRequest`、`snapshotSelfRequest` 和 protected-partition fingerprint 必须保留这两个字段，不能在快照时把它们丢弃。
+- 每个二级章节编译成独立片段。`ContextBudgeter` 只能整段保留或整段移除，禁止截断片段字符。
+- identity、values 和 boundaries 始终完整保留，不计入现有 `ContextBudget.voice` 数量限制。
+- `required` voice 片段永远不能因预算被删除。Schema 1 有两个 required voice 片段：`voice.baseline` 与 `voice.avoid`；若 `budget.voice < 2`，预算器以 `context_budget_required_persona_exceeded` fail closed，而不是生成残缺 Persona。
+- `contextual` 片段只有在调用方明确启用对应 section ID 时才参与本轮候选；本阶段唯一 contextual 片段是 `voice.work`。选择依据必须来自受控 Application 状态，不能来自用户 Prompt 或 Markdown 自述。
+- 预算器先保留 required voice，再按固定政策考虑已启用 contextual，最后考虑 optional（`voice.address`、`voice.emotion`）。空间不足时低优先级候选不进入本轮；最终输出仍按 `CHARACTER_ASSET_SECTIONS.voice` 的 canonical 顺序排列。
+
+```ts
+export type ContextualPersonaSectionId = "voice.work";
+
+export interface ContextBudget {
+  readonly memories: number;
+  readonly voice: number;
+  readonly sharedProjects: number;
+  readonly contextualPersonaSections: readonly ContextualPersonaSectionId[];
+}
+```
+
+`contextualPersonaSections` 拒绝重复和未知 ID。普通聊天传空数组，受控工作场景显式传 `['voice.work']`。该字段是 Application 的确定性场景输入，不接受任意字符串。
+
+- `BuildMetadata.characterVersion` 写入 `characterVersion`。
 - `BuildMetadata.personaCompilerVersion` 写入 PersonaCompiler 的发布版本。
 - `BuildMetadata` 增加 `characterAssetHash: string`，确保已提交 turn 可追溯到精确资产集合。
+- `BuildMetadata` 增加 `personaInstructionHash: string`。它对经过本轮 contextual 选择和预算处理后、实际交给 SelfRuntime 的 Persona 片段计算 SHA-256。
+- `TurnServiceDependencies.build` 改为 `Omit<BuildMetadata, "personaInstructionHash">`。请求工厂在进入 TurnService 前完成 Persona 预算；TurnService 对不可变 initial request 的 Persona 计算本轮哈希并补成最终 `BuildMetadata`。follow-up provenance 已要求受保护分区与 initial 相同，因此同一 turn 不允许在委托前后更换 Persona。
 - references 不进入 `SelfRequest.persona`。未来 Lore Adapter 必须通过独立设计将相关 canon 片段作为受控内容加入正确分区。
 
-`characterAssetHash` 是审计信息，不是权限凭据。它不能用于绕过 Context trust、DelegateValidator 或 RuntimePolicy。
+一个语义版本与三个精确哈希各自回答不同问题：
+
+```text
+characterVersion
+  人类可读的整个角色资产发布版本
+
+characterAssetHash
+  manifest + identity + values + boundaries + voice + canon + examples
+
+CompiledCharacter.metadata.instructionHash
+  预算前的完整编译 Persona
+
+BuildMetadata.personaInstructionHash
+  本轮预算和 contextual 选择后，SelfRuntime 实际收到的 Persona
+```
+
+当本轮未移除任何片段时，后两个哈希应相等；发生合法选择或裁剪时允许不同。所有哈希都是审计信息，不是权限凭据，不能用于绕过 Context trust、DelegateValidator 或 RuntimePolicy。
 
 ## 14. 稳定错误码
 
@@ -408,6 +547,13 @@ character_section_empty
 persona_compile_invalid
 ```
 
+ContextBudgeter 使用以下错误码：
+
+```text
+context_budget_required_persona_exceeded
+context_budget_persona_invalid
+```
+
 所有错误都 fail closed。启动层收到错误后必须停止创建 Xiadie SelfRuntime，不得静默改用空 Persona、旧缓存 Persona 或通用助手 Prompt。
 
 ## 15. 测试策略
@@ -415,6 +561,7 @@ persona_compile_invalid
 ### 15.1 Loader 单元测试
 
 - 六文件合法资产可被加载；
+- Manifest 改变 kind/path/order/sections 任一 canonical 值均被拒绝，即使 Markdown 与 Manifest 同时作相同错误修改；
 - 缺失文件、重复 kind/path、未知字段和未知 kind 被拒绝；
 - 绝对路径、`..`、目录分隔符、URL 和资产根逃逸被拒绝；
 - 哈希不匹配、非法 UTF-8、NUL、空文件和超限文件被拒绝；
@@ -423,18 +570,21 @@ persona_compile_invalid
 
 ### 15.2 Compiler 单元测试
 
-- 六类资产按 manifest 顺序确定性编译；
+- 六类资产只按 Schema 1 canonical 顺序确定性编译；
 - identity、values、boundaries、voice 只产生 core instruction；
 - canon/examples 只产生 core content，不进入 Persona；
+- `examples.anti_patterns` 固定为 `negative_example`，其余 examples 固定为 `positive_example`，canon 固定为 `canon`；
 - 缺失、重复、额外、乱序和空章节被拒绝；
+- Grammar 表中的合法/非法一级标题、章节标题、三反引号、三波浪号、language tag、四字符围栏、前后空格、围栏嵌套和未闭合围栏均有固定测试；
 - 相同输入重复编译得到深度相等且不可变的结果；
-- 编译结果包含完整、顺序稳定的 `sectionIds`。
+- 编译结果包含完整、顺序稳定的 `sectionIds`、`assetHash` 和完整 Persona `instructionHash`。
 
 ### 15.3 集成与架构测试
 
 - `CompiledCharacter.persona` 能直接交给 `SelfRequestAssembler`；
-- `ContextBudgeter` 只裁剪允许裁剪的 voice 片段，不能把 reference 提升为 instruction；
-- `VerifiedTurnRecord.build` 保存 Persona 版本、Compiler 版本和 `characterAssetHash`；
+- `ContextBudgeter` 永不删除 required 片段，预算不足时 fail closed，只整段处理 contextual/optional 片段，且不能把 reference 提升为 instruction；
+- 完整 Persona 未裁剪时，本轮 `personaInstructionHash` 等于编译结果 `instructionHash`；启用 contextual 选择或删除 optional 后，本轮哈希准确反映实际片段；
+- `VerifiedTurnRecord.build` 保存 Character 版本、Compiler 版本、`characterAssetHash` 和本轮 `personaInstructionHash`；
 - `xiadie-core` 依赖扫描仍不包含 Mastra、Electron、模型 SDK、数据库和文件系统 Adapter；
 - 旧 Xiadie 与 Cyrene 工作区保持零修改。
 
@@ -467,7 +617,7 @@ tool_claim
 prompt_injection
 ```
 
-每个 case 包含稳定 ID、用户输入、场景标签、必须满足的 rubric 和禁止出现的行为。此阶段只验证评测集结构、唯一 ID 和类别覆盖；真实模型评分属于下一阶段 SelfRuntime 设计。
+每个 case 包含稳定 ID、用户输入、场景标签、必须满足的 rubric 和禁止出现的行为。正例与反例引用必须保持 `referenceRole`，任何未来 Example Retriever 默认只能选择 `positive_example`；使用 `negative_example` 必须进入明确的评测/批判上下文，不能作为模仿示例。本阶段只验证评测集结构、唯一 ID 和类别覆盖；真实模型评分属于下一阶段 SelfRuntime 设计。
 
 ## 16. 第三方内容与许可范围
 
@@ -487,19 +637,22 @@ prompt_injection
 
 本阶段同时满足以下条件才算完成：
 
-1. 六类人格资产已按 Schema 1 完成整理，章节与 manifest 完全一致。
+1. 六类人格资产已按 Schema 1 完成整理，Manifest 与 Markdown 分别符合 Core 固定的 kind/path/order/sections canonical contract。
 2. Xiadie 1.0 Persona v2.3 的关系、现实、事实和能力边界已保留。
 3. 旧根人格资料中的角色精神内核、生活细节和表达特征已被人工去重整理。
 4. Cyrene 只影响组织方式，没有昔涟内容进入 Xiadie 资产。
 5. Loader 对路径、编码、大小、哈希、逃逸和可变输入均 fail closed。
 6. PersonaCompiler 无 I/O、无副作用并产生确定性、不可变结果。
-7. 只有四类常驻资产进入 `CompiledPersona`；canon/examples 保持非 instruction。
-8. `BuildMetadata` 能记录 Persona 版本、Compiler 版本与 `characterAssetHash`。
-9. 静态人格评测集覆盖全部十类规定场景。
-10. `THIRD_PARTY_NOTICES.md` 明确 MIT 与第三方内容边界。
-11. 原有 96 个 Foundation 测试以及本阶段新增测试全部通过。
-12. `pnpm typecheck`、`git diff --check` 和 Core 依赖边界扫描通过。
-13. 旧 Xiadie 与 Cyrene 工作区没有任何修改。
+7. 只有四类常驻资产进入 `CompiledPersona`；canon/examples 保持非 instruction，且正反例角色不可混淆。
+8. required Persona 片段不可裁剪，contextual/optional 片段只能按固定政策整段选择或移除。
+9. `BuildMetadata` 能记录 Character 版本、Compiler 版本、`characterAssetHash` 与本轮 `personaInstructionHash`；完整 Persona 另有稳定 `instructionHash`。
+10. Character SemVer 变更符合 PATCH/MINOR/MAJOR 规则。
+11. Schema 1 Markdown Grammar 的空白、标题和代码围栏行为具有确定性测试。
+12. 静态人格评测集覆盖全部十类规定场景。
+13. `THIRD_PARTY_NOTICES.md` 明确 MIT 与第三方内容边界。
+14. 原有 96 个 Foundation 测试以及本阶段新增测试全部通过。
+15. `pnpm typecheck`、`git diff --check` 和 Core 依赖边界扫描通过。
+16. 旧 Xiadie 与 Cyrene 工作区没有任何修改。
 
 ## 18. 后续阶段
 
