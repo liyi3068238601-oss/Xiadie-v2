@@ -25,8 +25,8 @@
 | 5. SelfRequestAssembler 与确定性预算 | 已完成 | `0bf0229`, `5802514` | 13/13 测试通过；typecheck exit 0 | 修复后 Approved | 可变上下文深层隔离，opaque evidence 保持 identity |
 | 6. ExecutionVerifier | 已完成 | `01bce4f`, `344e0a0` | 29/29 测试通过；typecheck exit 0 | 安全修复后 Approved | 重复/冲突 operation 与 candidate 全部 fail closed |
 | 7. 内存版 TurnService 垂直切片 | 已完成 | `45307eb`, `99454ce`, `4602060`, `a46e125` | 74/74 测试通过；typecheck/diff-check exit 0 | 多轮硬化后 Approved | trusted validator、single-flight、token checkpoint、provenance、bounded LRU |
-| 8. 验证证据、README 与最终检查 | 已完成 | `665b82a`, `509d2d4` | Node 24.16.0；74/74 测试；typecheck exit 0；Core 扫描无匹配 | 修复后 Approved | 验收命令已改为可复制 PowerShell |
-| 全分支审查 | 进行中 | 待登记 | 待登记 | 待登记 | 当前施工项 |
+| 8. 验证证据、README 与最终检查 | 已完成 | `665b82a`, `509d2d4`, `6c01ab0` | Node 24.16.0；96/96 测试；typecheck exit 0；Core 扫描无匹配 | 修复后 Approved | 验收命令可复制，终审修复证据已刷新 |
+| 全分支审查 | 已完成 | `ffd6975`, `6c01ab0` | 96/96 测试；typecheck/diff-check exit 0 | Ready to merge: Yes | 5 Important + 1 Minor 全部关闭 |
 
 ## 提交与审查流水
 
@@ -56,10 +56,15 @@
 | 2026-08-09 | 任务 8 验收文档 | `665b82a` | 新增 README 与 Phase 1 验证记录 |
 | 2026-08-09 | 任务 8 可复现性修复 | `509d2d4` | 修正 Core 扫描与 Windows PowerShell 实际命令 |
 | 2026-08-09 | 任务 8 最终复审 | `d5f86ef..509d2d4` | Approved；无 Critical/Important/Minor 遗留 |
+| 2026-08-11 | 全分支终审 | `1421564..e82eb88` | 发现 5 个跨任务 Important 与 1 个 Minor，进入统一修复 |
+| 2026-08-11 | 终审统一修复 | `ffd6975` | 加固 Persona、verified facts、Self snapshot、缓存结果和 operation/sequence 边界 |
+| 2026-08-11 | 验证证据刷新 | `6c01ab0` | Node 24.16.0 下刷新为 96/96 测试与新增对抗边界 |
+| 2026-08-11 | 终审复核 | `e82eb88..6c01ab0` | Ready to merge: Yes；无 Critical/Important/Minor 遗留 |
+| 2026-08-11 | 主控独立验收 | `6c01ab0` | Node 24.16.0、pnpm 11.16.0；96/96、typecheck、diff-check 通过；Core 扫描无匹配 |
 
 ## 遗留事项
 
 - Codex 默认 `pnpm.cmd` wrapper 使用 Node 24.14.0；最终验收已改用系统 Node 24.16.0 驱动同一 pnpm 11.16.0 入口，取得无 engine warning 的正式证据。
 - Task 1 按 TypeScript 7.0.2 兼容性要求移除了已废弃的 `baseUrl`，并将四个 `paths` 目标改为等价相对路径；任务审查确认合理。
 - Codex fallback `pnpm.cmd` 未给 arbitrary command 自动注入 workspace `.bin`；聚焦验证暂通过进程级 PATH 前置执行，根 `pnpm test`/`pnpm typecheck` 不受影响。
-- Task 4 Minor：`TaskContextBuilder` 的防御性复制测试目前只主动变更 `relevantFacts`，最终全分支审查时决定是否补齐 `artifacts` 与 `constraints` 的对称断言。
+- Task 4 的 `TaskContextBuilder` 对称 mutation 覆盖已在终审修复 `ffd6975` 中补齐，原 Minor 已关闭。
