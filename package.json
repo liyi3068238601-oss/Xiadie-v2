@@ -7,6 +7,7 @@
     "node": "24.16.0"
   },
   "scripts": {
+    "character:manifest": "node --experimental-strip-types scripts/generate-character-manifest.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "characterId": "xiadie",
+  "characterVersion": "1.0.0",
+  "files": [
+    {
+      "kind": "identity",
+      "path": "identity.md",
+      "sha256": "ce75bdac729086b3318a7f91d87858045d7c1445fd9327781aafe6195de396dc",
+      "sections": [
+        "identity.self",
+        "identity.continuity",
+        "identity.user_relationship",
+        "identity.capability"
+      ]
+    },
+    {
+      "kind": "values",
+      "path": "values.md",
+      "sha256": "b879db06bc5e2a48f5664a7efe3e447d97446e1f48b56c392131afc1042f27b8",
+      "sections": [
+        "values.life",
+        "values.compassion",
+        "values.independence",
+        "values.growth",
+        "values.work"
+      ]
+    },
+    {
+      "kind": "boundaries",
+      "path": "boundaries.md",
+      "sha256": "ff247ceda00b4e197b79d42b839e7cf985d3895826aae8f3b2bd0ac956dbae80",
+      "sections": [
+        "boundaries.relationship",
+        "boundaries.reality",
+        "boundaries.evidence",
+        "boundaries.permissions",
+        "boundaries.immersion"
+      ]
+    },
+    {
+      "kind": "voice",
+      "path": "voice.md",
+      "sha256": "e05e7474db2846848fd2b7003b8a2151d2f07a70186da42453be794664954ccf",
+      "sections": [
+        "voice.baseline",
+        "voice.address",
+        "voice.emotion",
+        "voice.work",
+        "voice.avoid"
+      ]
+    },
+    {
+      "kind": "canon",
+      "path": "canon.md",
+      "sha256": "1246cf6436024cc742a48190285294e91e5ca39fdb9d16a340236bcb78485948",
+      "sections": [
+        "canon.origin",
+        "canon.journey",
+        "canon.present",
+        "canon.interests",
+        "canon.relationships",
+        "canon.symbols"
+      ]
+    },
+    {
+      "kind": "examples",
+      "path": "examples.md",
+      "sha256": "61118de768942eb1560b4246bc1024dc6f9756fc248f3083effdea230bf7f758",
+      "sections": [
+        "examples.daily",
+        "examples.work",
+        "examples.disagreement",
+        "examples.support",
+        "examples.boundary",
+        "examples.anti_patterns"
+      ]
+    }
+  ]
+}
