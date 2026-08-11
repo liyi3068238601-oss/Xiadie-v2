@@ -23,7 +23,17 @@ import {
   InMemoryConversationStore,
   TurnService,
   type ConversationStore,
+  type TurnRunResult,
 } from "./index.js";
+
+const assertTurnRunResultIsReadonly = (result: TurnRunResult): void => {
+  // @ts-expect-error A cached result cannot be rewritten by its caller.
+  result.finalResponse = "forged";
+  // @ts-expect-error A cached result cannot point at a replacement commit.
+  result.committed = result.committed;
+};
+
+void assertTurnRunResultIsReadonly;
 
 const turnId = asTurnId("turn-1");
 
@@ -60,6 +70,51 @@ const createRequest = (
   turnInput: { id: `${id}:user:0`, content: userMessage },
   evidence,
   capabilities: { descriptions: ["workspace.read"] },
+});
+
+const createRichRequest = (id: TurnId, userMessage: string): SelfRequest => ({
+  ...createRequest(id, userMessage),
+  persona: {
+    identity: [
+      {
+        content: "逍蝶",
+        source: "character",
+        trust: "core",
+        purpose: "instruction",
+      },
+    ],
+    values: [],
+    boundaries: [
+      {
+        content: "不得越权",
+        source: "character",
+        trust: "core",
+        purpose: "instruction",
+      },
+    ],
+    voice: [],
+  },
+  state: {
+    self: { currentConcerns: ["finish the turn"] },
+    relationship: { userDisplayName: "user", sharedProjects: ["project A"] },
+  },
+  memories: [
+    {
+      id: "memory-1",
+      kind: "user_fact",
+      content: "prefers concise answers",
+      source: {
+        turnId: asTurnId("turn-0"),
+        conversationId: "conversation-1",
+        messageIds: ["turn-0:user:0"],
+      },
+      attribution: "user_explicit",
+      confidence: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      status: "active",
+    },
+  ],
 });
 
 const selfBase = (
@@ -196,7 +251,7 @@ class RecordingConversationStore implements ConversationStore {
 }
 
 interface ServiceOptions {
-  self: ScriptedSelf;
+  self: SelfRuntime;
   agent?: AgentRuntime;
   conversations?: ConversationStore;
   checkpoints?: InMemoryCheckpointStore;
@@ -444,6 +499,38 @@ describe("TurnService", () => {
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
   });
 
+  it("prevents a caller from polluting the concurrent and historical cached result", async () => {
+    const self = new ScriptedSelf([[started(), final("pristine answer")]]);
+    const setup = createService({ self });
+    const input = { conversationId: "conversation-1", userMessage: "hello" };
+
+    const first = setup.service.run(input);
+    const concurrent = setup.service.run({ ...input });
+    expect(concurrent).toBe(first);
+
+    const firstResult = await first;
+    expect(Object.isFrozen(firstResult)).toBe(true);
+    expect(() => {
+      (firstResult as any).finalResponse = "polluted answer";
+    }).toThrow(TypeError);
+    expect(() => {
+      (firstResult as any).committed = {
+        ...firstResult.committed,
+        finalResponseId: "polluted-commit",
+      };
+    }).toThrow(TypeError);
+
+    const concurrentResult = await concurrent;
+    const retried = setup.service.run({ ...input });
+    const retriedResult = await retried;
+
+    expect(retried).toBe(first);
+    expect(concurrentResult).toBe(firstResult);
+    expect(retriedResult).toBe(firstResult);
+    expect(concurrentResult.finalResponse).toBe("pristine answer");
+    expect(retriedResult.committed.finalResponseId).toBe("self-event-2");
+  });
+
   it("removes a settled flight and refuses to replay an evicted committed turn", async () => {
     const turn2 = asTurnId("turn-2");
     const ids = [turnId, turn2, turnId];
@@ -659,11 +746,102 @@ describe("TurnService", () => {
     });
   });
 
+  it("isolates and freezes both Self request snapshots against a malicious runtime", async () => {
+    const requests: SelfRequest[] = [];
+    let runtimeCall = 0;
+    let verifiedReport: SelfRequest["evidence"][number] | undefined;
+    const self: SelfRuntime = {
+      async *respond(input): AsyncIterable<SelfEvent> {
+        requests.push(input);
+        runtimeCall += 1;
+        expect(Object.isFrozen(input)).toBe(true);
+
+        if (runtimeCall === 1) {
+          expect(Reflect.set(input.turnInput, "content", "forged input")).toBe(
+            false,
+          );
+          expect(
+            Reflect.set(input.persona.identity[0]!, "content", "forged persona"),
+          ).toBe(false);
+          expect(() =>
+            (input.state.self.currentConcerns as unknown as string[]).push(
+              "forged concern",
+            ),
+          ).toThrow(TypeError);
+          expect(Reflect.set(input.memories[0]!, "content", "forged memory")).toBe(
+            false,
+          );
+          expect(() =>
+            (input.capabilities.descriptions as unknown as string[]).push(
+              "forged capability",
+            ),
+          ).toThrow(TypeError);
+          expect(() =>
+            (input.evidence as unknown as unknown[]).push({ runId: "forged" }),
+          ).toThrow(TypeError);
+
+          yield started();
+          yield delegate();
+          return;
+        }
+
+        expect(input.turnInput).toEqual({
+          id: "turn-1:user:0",
+          content: "inspect safely",
+        });
+        expect(input.persona.identity[0]?.content).toBe("逍蝶");
+        expect(input.state.self.currentConcerns).toEqual(["finish the turn"]);
+        expect(input.memories[0]?.content).toBe("prefers concise answers");
+        expect(input.capabilities.descriptions).toEqual(["workspace.read"]);
+        expect(input.evidence).toHaveLength(1);
+        expect(input.evidence[0]).toBe(verifiedReport);
+        yield started(1, { runId: "self-run-2" });
+        yield final("pristine completion", 2, "self-run-2");
+      },
+    };
+    let initialFactoryOutput: SelfRequest | undefined;
+    let followupFactoryOutput: SelfRequest | undefined;
+    const setup = createService({
+      self,
+      createInitialRequest: (id, userMessage) => {
+        initialFactoryOutput = createRichRequest(id, userMessage);
+        return initialFactoryOutput;
+      },
+      createFollowupRequest: (request, evidence) => {
+        verifiedReport = evidence[0];
+        followupFactoryOutput = { ...request, evidence };
+        return followupFactoryOutput;
+      },
+    });
+
+    const result = await setup.service.run({
+      conversationId: "conversation-1",
+      userMessage: "inspect safely",
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).not.toBe(initialFactoryOutput);
+    expect(requests[1]).not.toBe(followupFactoryOutput);
+    expect(Object.isFrozen(requests[1])).toBe(true);
+    expect(Reflect.set(initialFactoryOutput!.turnInput, "content", "late poison")).toBe(
+      true,
+    );
+    expect(Reflect.set(followupFactoryOutput!, "evidence", [])).toBe(true);
+    expect(requests[0]?.turnInput.content).toBe("inspect safely");
+    expect(requests[1]?.evidence[0]).toBe(verifiedReport);
+    expect(result.finalResponse).toBe("pristine completion");
+    expect(result.committed.userMessageId).toBe("turn-1:user:0");
+  });
+
   it.each([
     "missing evidence",
     "cloned evidence",
     "changed user message id",
     "changed user message content",
+    "changed persona",
+    "changed state",
+    "changed memories",
+    "changed capabilities",
   ] as const)("rejects follow-up provenance with %s", async (variant) => {
     const self = new ScriptedSelf([[started(), delegate()]]);
     const setup = createService({
@@ -685,9 +863,66 @@ describe("TurnService", () => {
             evidence,
           };
         }
+        if (variant === "changed user message content") {
+          return {
+            ...request,
+            turnInput: { ...request.turnInput, content: "forged user content" },
+            evidence,
+          };
+        }
+        if (variant === "changed persona") {
+          return {
+            ...request,
+            persona: {
+              ...request.persona,
+              identity: [
+                {
+                  content: "different but structurally trusted persona",
+                  source: "character",
+                  trust: "core",
+                  purpose: "instruction",
+                },
+              ],
+            },
+            evidence,
+          };
+        }
+        if (variant === "changed state") {
+          return {
+            ...request,
+            state: {
+              ...request.state,
+              self: { currentConcerns: ["forged concern"] },
+            },
+            evidence,
+          };
+        }
+        if (variant === "changed memories") {
+          return {
+            ...request,
+            memories: [
+              {
+                id: "forged-memory",
+                kind: "user_fact",
+                content: "forged",
+                source: {
+                  turnId,
+                  conversationId: "conversation-1",
+                  messageIds: ["forged-message"],
+                },
+                attribution: "user_explicit",
+                confidence: 1,
+                createdAt: 0,
+                updatedAt: 0,
+                status: "active",
+              },
+            ],
+            evidence,
+          };
+        }
         return {
           ...request,
-          turnInput: { ...request.turnInput, content: "forged user content" },
+          capabilities: { descriptions: ["forged capability"] },
           evidence,
         };
       },

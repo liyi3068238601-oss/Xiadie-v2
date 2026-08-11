@@ -83,6 +83,44 @@ describe("verifyExecution", () => {
     });
   });
 
+  it("deeply freezes the verified report and every promoted fact", () => {
+    const report = verifyExecution(
+      runRecord({
+        events: [
+          event("tool.completed", "op-1", 1),
+          event("run.completed", "run-op", 2),
+        ],
+        toolResults: [
+          { operationId: "op-1", ok: true, summary: "created file" },
+        ],
+        candidates: [
+          { id: "e-1", operationId: "op-1", summary: "created file" },
+        ],
+      }),
+    );
+
+    expect(Object.isFrozen(report)).toBe(true);
+    expect(Object.isFrozen(report.evidence)).toBe(true);
+    expect(Object.isFrozen(report.evidence[0])).toBe(true);
+    expect(() => {
+      (report as any).status = "failed";
+    }).toThrow(TypeError);
+    expect(() => {
+      (report.evidence as unknown as unknown[]).push({
+        id: "forged",
+        operationId: "forged",
+        summary: "forged",
+      });
+    }).toThrow(TypeError);
+    expect(() => {
+      (report.evidence[0] as any).summary = "forged";
+    }).toThrow(TypeError);
+    expect(report.status).toBe("success");
+    expect(report.evidence).toEqual([
+      { id: "e-1", operationId: "op-1", summary: "created file" },
+    ]);
+  });
+
   it("rejects multiple mutually exclusive terminal events", () => {
     expect(() =>
       verifyExecution(
@@ -128,6 +166,79 @@ describe("verifyExecution", () => {
         }),
       ),
     ).toThrowError("runtime_event_sequence_invalid");
+  });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["fractional", 1.5],
+    ["negative", -1],
+    ["unsafe", Number.MAX_SAFE_INTEGER + 1],
+  ])("rejects an invalid %s event sequence", (_label, sequence) => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [event("run.completed", "run-op", sequence)],
+        }),
+      ),
+    ).toThrowError("runtime_event_sequence_invalid");
+  });
+
+  it.each([
+    [
+      "event",
+      runRecord({ events: [event("run.completed", "", 1)] }),
+    ],
+    [
+      "tool result",
+      runRecord({
+        events: [
+          event("tool.completed", "op-1", 1),
+          event("run.completed", "run-op", 2),
+        ],
+        toolResults: [
+          { operationId: "   ", ok: true, summary: "untraceable" },
+        ],
+      }),
+    ],
+    [
+      "evidence candidate",
+      runRecord({
+        events: [
+          event("tool.completed", "op-1", 1),
+          event("run.completed", "run-op", 2),
+        ],
+        toolResults: [
+          { operationId: "op-1", ok: true, summary: "created" },
+        ],
+        candidates: [
+          { id: "e-1", operationId: "\t", summary: "untraceable" },
+        ],
+      }),
+    ],
+  ])("rejects an empty or blank %s operation ID", (_label, run) => {
+    expect(() => verifyExecution(run)).toThrowError(
+      "runtime_operation_id_invalid",
+    );
+  });
+
+  it("never promotes a blank operation ID shared by all runtime claims", () => {
+    expect(() =>
+      verifyExecution(
+        runRecord({
+          events: [
+            event("tool.completed", " ", 1),
+            event("run.completed", "run-op", 2),
+          ],
+          toolResults: [
+            { operationId: " ", ok: true, summary: "claimed success" },
+          ],
+          candidates: [
+            { id: "e-blank", operationId: " ", summary: "claimed success" },
+          ],
+        }),
+      ),
+    ).toThrowError("runtime_operation_id_invalid");
   });
 
   it("rejects an event from a different run", () => {

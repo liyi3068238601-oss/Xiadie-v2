@@ -20,6 +20,10 @@ import type { ConversationStore } from "./conversation-store.js";
 import { validateDelegate } from "./delegate-validator.js";
 import { verifyExecution } from "./execution-verifier.js";
 import type { RuntimePolicy } from "./runtime-policy.js";
+import {
+  fingerprintProtectedSelfRequestPartitions,
+  snapshotSelfRequest,
+} from "./self-request-snapshot.js";
 
 type SelfDecision =
   | { kind: "final"; response: string; eventId: string }
@@ -82,40 +86,44 @@ async function collectDecision(
 }
 
 export interface TurnServiceDependencies {
-  self: SelfRuntime;
-  agent: AgentRuntime;
-  policy: RuntimePolicy;
-  createTurnId: () => TurnId;
-  createInitialRequest: (turnId: TurnId, userMessage: string) => SelfRequest;
-  createFollowupRequest: (
+  readonly self: SelfRuntime;
+  readonly agent: AgentRuntime;
+  readonly policy: RuntimePolicy;
+  readonly createTurnId: () => TurnId;
+  readonly createInitialRequest: (
+    turnId: TurnId,
+    userMessage: string,
+  ) => SelfRequest;
+  readonly createFollowupRequest: (
     request: SelfRequest,
     evidence: SelfRequest["evidence"],
   ) => SelfRequest;
-  build: BuildMetadata;
-  conversations: ConversationStore;
-  checkpoints: CheckpointStore;
+  readonly build: BuildMetadata;
+  readonly conversations: ConversationStore;
+  readonly checkpoints: CheckpointStore;
 }
 
 export interface TurnRunInput {
-  conversationId: string;
-  userMessage: string;
+  readonly conversationId: string;
+  readonly userMessage: string;
 }
 
 export interface TurnRunResult {
-  finalResponse: string;
-  committed: CommittedTurnRecord;
+  readonly finalResponse: string;
+  readonly committed: CommittedTurnRecord;
 }
 
 interface TurnFlight {
-  inputFingerprint: string;
-  promise: Promise<TurnRunResult>;
+  readonly inputFingerprint: string;
+  readonly promise: Promise<TurnRunResult>;
 }
 
 interface TurnPreflight {
-  turnId: TurnId;
-  input: TurnRunInput;
-  initial: SelfRequest;
-  userMessageId: string;
+  readonly turnId: TurnId;
+  readonly input: TurnRunInput;
+  readonly initial: SelfRequest;
+  readonly userMessageId: string;
+  readonly protectedPartitionFingerprint: string;
 }
 
 export interface TurnServiceOptions {
@@ -149,10 +157,10 @@ export class TurnService {
 
   run(input: TurnRunInput): Promise<TurnRunResult> {
     const turnId = this.dependencies.createTurnId();
-    const runInput: TurnRunInput = {
+    const runInput: TurnRunInput = Object.freeze({
       conversationId: input.conversationId,
       userMessage: input.userMessage,
-    };
+    });
     const inputFingerprint = JSON.stringify([
       runInput.conversationId,
       runInput.userMessage,
@@ -218,27 +226,36 @@ export class TurnService {
 
   private preflight(turnId: TurnId, input: TurnRunInput): TurnPreflight {
     const userMessageId = `${turnId}:user:0`;
-    const initial = this.dependencies.createInitialRequest(
+    const factoryInitial = this.dependencies.createInitialRequest(
       turnId,
       input.userMessage,
     );
     if (
-      initial.turnId !== turnId ||
-      initial.turnInput.id !== userMessageId ||
-      initial.turnInput.content !== input.userMessage
+      factoryInitial.turnId !== turnId ||
+      factoryInitial.turnInput.id !== userMessageId ||
+      factoryInitial.turnInput.content !== input.userMessage
     ) {
       throw new Error("initial_request_provenance_invalid");
     }
-    return {
+    const initial = snapshotSelfRequest(factoryInitial);
+    return Object.freeze({
       turnId,
       input,
       initial,
       userMessageId,
-    };
+      protectedPartitionFingerprint:
+        fingerprintProtectedSelfRequestPartitions(initial),
+    });
   }
 
   private async execute(preflight: TurnPreflight): Promise<TurnRunResult> {
-    const { turnId, input, initial, userMessageId } = preflight;
+    const {
+      turnId,
+      input,
+      initial,
+      userMessageId,
+      protectedPartitionFingerprint,
+    } = preflight;
 
     const first = await collectDecision(
       this.dependencies.self.respond(initial),
@@ -277,18 +294,30 @@ export class TurnService {
         evidenceIds: report.evidence.map((item) => item.id),
       });
 
-      const followup = this.dependencies.createFollowupRequest(initial, [report]);
-      if (followup.turnId !== turnId) {
+      const verifiedEvidence = Object.freeze([report]);
+      const factoryFollowup = this.dependencies.createFollowupRequest(
+        initial,
+        verifiedEvidence,
+      );
+      if (factoryFollowup.turnId !== turnId) {
         throw new Error("followup_request_turn_id_mismatch");
       }
-      if (
-        followup.turnInput.id !== initial.turnInput.id ||
-        followup.turnInput.content !== initial.turnInput.content ||
-        followup.evidence.length !== 1 ||
-        followup.evidence[0] !== report
-      ) {
+      let followupProvenanceValid = false;
+      try {
+        followupProvenanceValid =
+          factoryFollowup.turnInput.id === userMessageId &&
+          factoryFollowup.turnInput.content === input.userMessage &&
+          factoryFollowup.evidence.length === 1 &&
+          factoryFollowup.evidence[0] === report &&
+          fingerprintProtectedSelfRequestPartitions(factoryFollowup) ===
+            protectedPartitionFingerprint;
+      } catch {
+        followupProvenanceValid = false;
+      }
+      if (!followupProvenanceValid) {
         throw new Error("followup_request_provenance_invalid");
       }
+      const followup = snapshotSelfRequest(factoryFollowup);
       const second = await collectDecision(
         this.dependencies.self.respond(followup),
         turnId,
@@ -313,6 +342,6 @@ export class TurnService {
     if (checkpointOwner !== undefined) {
       this.dependencies.checkpoints.complete(turnId, checkpointOwner);
     }
-    return { finalResponse, committed };
+    return Object.freeze({ finalResponse, committed });
   }
 }

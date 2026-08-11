@@ -6,31 +6,34 @@ declare const verifiedExecutionReportBrand: unique symbol;
 
 export interface ExecutionEvidence {
   readonly [executionEvidenceBrand]: true;
-  id: string;
-  operationId: string;
-  summary: string;
+  readonly id: string;
+  readonly operationId: string;
+  readonly summary: string;
 }
 
 export interface VerifiedExecutionReport {
   readonly [verifiedExecutionReportBrand]: true;
-  runId: string;
-  status: "success" | "partial" | "failed";
-  evidence: ExecutionEvidence[];
+  readonly runId: string;
+  readonly status: "success" | "partial" | "failed";
+  readonly evidence: readonly ExecutionEvidence[];
 }
 
 export interface UserMessage {
-  id: string;
-  content: string;
+  readonly id: string;
+  readonly content: string;
 }
 
 export interface SelfRequest {
-  turnId: TurnId;
-  persona: CompiledPersona;
-  state: { self: SelfState; relationship: RelationshipState };
-  memories: MemoryRecord[];
-  turnInput: UserMessage;
-  evidence: VerifiedExecutionReport[];
-  capabilities: CapabilityAwareness;
+  readonly turnId: TurnId;
+  readonly persona: CompiledPersona;
+  readonly state: {
+    readonly self: SelfState;
+    readonly relationship: RelationshipState;
+  };
+  readonly memories: readonly MemoryRecord[];
+  readonly turnInput: UserMessage;
+  readonly evidence: readonly VerifiedExecutionReport[];
+  readonly capabilities: CapabilityAwareness;
 }
 
 export interface VerifiedExecutionRef {

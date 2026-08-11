@@ -8,6 +8,9 @@ export interface ExecutionVerifier {
   verify(run: RuntimeRunRecord): VerifiedExecutionReport;
 }
 
+const isValidOperationId = (operationId: unknown): operationId is string =>
+  typeof operationId === "string" && operationId.trim().length > 0;
+
 export function verifyExecution(
   run: RuntimeRunRecord,
 ): VerifiedExecutionReport {
@@ -33,6 +36,14 @@ export function verifyExecution(
       throw new Error("runtime_event_identity_invalid");
     }
 
+    if (!isValidOperationId(current.operationId)) {
+      throw new Error("runtime_operation_id_invalid");
+    }
+
+    if (!Number.isSafeInteger(current.sequence) || current.sequence < 0) {
+      throw new Error("runtime_event_sequence_invalid");
+    }
+
     const previous = run.events[index - 1];
     if (previous !== undefined && current.sequence <= previous.sequence) {
       throw new Error("runtime_event_sequence_invalid");
@@ -53,6 +64,9 @@ export function verifyExecution(
   const resultOperations = new Set<string>();
   const successfulOperations = new Set<string>();
   for (const result of run.toolResults) {
+    if (!isValidOperationId(result.operationId)) {
+      throw new Error("runtime_operation_id_invalid");
+    }
     if (resultOperations.has(result.operationId)) {
       throw new Error("runtime_operation_state_invalid");
     }
@@ -63,6 +77,9 @@ export function verifyExecution(
   const candidateIds = new Set<string>();
   const candidateOperations = new Set<string>();
   for (const candidate of run.candidates) {
+    if (!isValidOperationId(candidate.operationId)) {
+      throw new Error("runtime_operation_id_invalid");
+    }
     if (
       candidateIds.has(candidate.id) ||
       candidateOperations.has(candidate.operationId)
@@ -73,17 +90,21 @@ export function verifyExecution(
     candidateOperations.add(candidate.operationId);
   }
 
-  const evidence = run.candidates
-    .filter(
-      (candidate) =>
-        completedOperations.has(candidate.operationId) &&
-        successfulOperations.has(candidate.operationId),
-    )
-    .map((candidate) => ({
-      id: candidate.id,
-      operationId: candidate.operationId,
-      summary: candidate.summary,
-    }));
+  const evidence = Object.freeze(
+    run.candidates
+      .filter(
+        (candidate) =>
+          completedOperations.has(candidate.operationId) &&
+          successfulOperations.has(candidate.operationId),
+      )
+      .map((candidate) =>
+        Object.freeze({
+          id: candidate.id,
+          operationId: candidate.operationId,
+          summary: candidate.summary,
+        }),
+      ),
+  );
   const status =
     terminal?.type === "run.completed"
       ? evidence.length > 0
@@ -93,7 +114,12 @@ export function verifyExecution(
 
   // Core intentionally keeps both brands opaque. This verifier is the sole
   // production construction boundary, after all deterministic checks above.
-  return { runId: run.runId, status, evidence } as unknown as VerifiedExecutionReport;
+  const report = {
+    runId: run.runId,
+    status,
+    evidence,
+  } as unknown as VerifiedExecutionReport;
+  return Object.freeze(report);
 }
 
 export const executionVerifier: ExecutionVerifier = {

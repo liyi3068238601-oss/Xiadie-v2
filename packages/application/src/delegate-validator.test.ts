@@ -75,13 +75,17 @@ describe("validateDelegate", () => {
 describe("buildTaskContext", () => {
   it("copies only the explicit task-context fields", () => {
     const facts = ["repository is TypeScript"];
+    const artifacts = ["README.md"];
+    const constraints = ["read-only"];
     const context = buildTaskContext({
       relevantFacts: facts,
-      artifacts: ["README.md"],
-      constraints: ["read-only"],
+      artifacts,
+      constraints,
     });
 
     facts.push("later mutation");
+    artifacts.push("later artifact");
+    constraints.push("later constraint");
 
     expect(context).toEqual({
       relevantFacts: ["repository is TypeScript"],

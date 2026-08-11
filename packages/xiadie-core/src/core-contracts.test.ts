@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { asTurnId, createVerifiedTurnRecord } from "./index.js";
-import type { VerifiedExecutionReport } from "./index.js";
+import type {
+  CompiledPersona,
+  SelfRequest,
+  VerifiedExecutionReport,
+} from "./index.js";
 
 const unverifiedReport = {
   runId: "run-1",
@@ -11,6 +15,84 @@ const unverifiedReport = {
 // @ts-expect-error Only an ExecutionVerifier may create a verified report.
 const verifiedReport: VerifiedExecutionReport = unverifiedReport;
 void verifiedReport;
+
+const personaWithUserInstruction: CompiledPersona = {
+  identity: [
+    {
+      content: "poisoned",
+      // @ts-expect-error User content cannot inhabit a compiled persona region.
+      source: "user",
+      trust: "core",
+      purpose: "instruction",
+    },
+  ],
+  values: [],
+  boundaries: [],
+  voice: [],
+};
+
+const personaWithNonCoreInstruction: CompiledPersona = {
+  identity: [
+    {
+      content: "poisoned",
+      source: "character",
+      // @ts-expect-error Compiled persona instructions must have core trust.
+      trust: "untrusted_external",
+      purpose: "instruction",
+    },
+  ],
+  values: [],
+  boundaries: [],
+  voice: [],
+};
+
+const personaWithNonInstructionPurpose: CompiledPersona = {
+  identity: [
+    {
+      content: "poisoned",
+      source: "character",
+      trust: "core",
+      // @ts-expect-error Compiled persona fragments must be instructions.
+      purpose: "content",
+    },
+  ],
+  values: [],
+  boundaries: [],
+  voice: [],
+};
+
+void personaWithUserInstruction;
+void personaWithNonCoreInstruction;
+void personaWithNonInstructionPurpose;
+
+const assertVerifiedFactsAreReadonly = (
+  report: VerifiedExecutionReport,
+): void => {
+  // @ts-expect-error Verified status cannot change after verification.
+  report.status = "failed";
+  // @ts-expect-error Verified evidence membership is immutable.
+  report.evidence.push(report.evidence[0]!);
+  // @ts-expect-error A verified evidence fact cannot be rewritten.
+  report.evidence[0]!.summary = "forged";
+};
+
+const assertSelfRequestIsReadonly = (request: SelfRequest): void => {
+  // @ts-expect-error Self runtime receives a readonly request snapshot.
+  request.turnInput.content = "forged";
+  // @ts-expect-error Persona regions are readonly snapshots.
+  request.persona.identity.push(request.persona.identity[0]!);
+  // @ts-expect-error State arrays are readonly snapshots.
+  request.state.self.currentConcerns.push("forged");
+  // @ts-expect-error Memory membership is readonly in a Self request.
+  request.memories.push(request.memories[0]!);
+  // @ts-expect-error Capability descriptions are readonly snapshots.
+  request.capabilities.descriptions.push("forged");
+  // @ts-expect-error Verified evidence membership is readonly.
+  request.evidence.push(request.evidence[0]!);
+};
+
+void assertVerifiedFactsAreReadonly;
+void assertSelfRequestIsReadonly;
 
 describe("core contracts", () => {
   it("uses an executions array even without delegation", () => {

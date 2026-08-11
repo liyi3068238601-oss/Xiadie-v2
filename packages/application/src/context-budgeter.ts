@@ -1,4 +1,5 @@
 import type { SelfRequest } from "@xiadie/xiadie-core";
+import { snapshotSelfRequest } from "./self-request-snapshot.js";
 
 export interface ContextBudget {
   memories: number;
@@ -6,17 +7,28 @@ export interface ContextBudget {
   sharedProjects: number;
 }
 
-const take = <T>(values: T[], limit: number): T[] => values.slice(0, Math.max(0, limit));
+const take = <T>(values: readonly T[], limit: number): readonly T[] =>
+  values.slice(0, Math.max(0, limit));
 
-export const applyContextBudget = (request: SelfRequest, budget: ContextBudget): SelfRequest => ({
-  ...request,
-  persona: { ...request.persona, voice: take(request.persona.voice, budget.voice) },
-  state: {
-    ...request.state,
-    relationship: {
-      ...request.state.relationship,
-      sharedProjects: take(request.state.relationship.sharedProjects, budget.sharedProjects),
+export const applyContextBudget = (
+  request: SelfRequest,
+  budget: ContextBudget,
+): SelfRequest =>
+  snapshotSelfRequest({
+    ...request,
+    persona: {
+      ...request.persona,
+      voice: take(request.persona.voice, budget.voice),
     },
-  },
-  memories: take(request.memories, budget.memories),
-});
+    state: {
+      ...request.state,
+      relationship: {
+        ...request.state.relationship,
+        sharedProjects: take(
+          request.state.relationship.sharedProjects,
+          budget.sharedProjects,
+        ),
+      },
+    },
+    memories: take(request.memories, budget.memories),
+  });
