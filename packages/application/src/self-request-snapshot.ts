@@ -5,6 +5,10 @@ import type {
   SelfRequest,
   VerifiedExecutionReport,
 } from "@xiadie/xiadie-core";
+import {
+  CHARACTER_ASSET_SECTIONS,
+  PERSONA_SECTION_POLICY,
+} from "@xiadie/xiadie-core";
 
 const PERSONA_REGIONS = [
   "identity",
@@ -40,8 +44,22 @@ export const assertPersonaInstructions = (
   for (const region of PERSONA_REGIONS) {
     const fragments = candidate[region];
     if (!Array.isArray(fragments)) invalidPersona();
+    const allowedSections = CHARACTER_ASSET_SECTIONS[region] as readonly string[];
+    let previousIndex = -1;
     for (const fragment of fragments as unknown[]) {
-      if (!isPersonaInstruction(fragment)) invalidPersona();
+      if (!isPersonaInstruction(fragment)) {
+        invalidPersona();
+      }
+      const instruction = fragment as PersonaInstructionFragment;
+      const sectionIndex = allowedSections.indexOf(instruction.sectionId);
+      if (
+        sectionIndex <= previousIndex ||
+        PERSONA_SECTION_POLICY[instruction.sectionId as keyof typeof PERSONA_SECTION_POLICY] !==
+          instruction.priority
+      ) {
+        invalidPersona();
+      }
+      previousIndex = sectionIndex;
     }
   }
 };

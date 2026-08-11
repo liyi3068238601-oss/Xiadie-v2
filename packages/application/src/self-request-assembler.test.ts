@@ -32,6 +32,9 @@ const requestInput = (): SelfRequest => ({
     boundaries: [{ sectionId: "boundaries.permissions", priority: "required", content: "不得越权", source: "character", trust: "core", purpose: "instruction" }],
     voice: [
       { sectionId: "voice.baseline", priority: "required", content: "温和", source: "character", trust: "core", purpose: "instruction" },
+      { sectionId: "voice.address", priority: "optional", content: "称呼", source: "character", trust: "core", purpose: "instruction" },
+      { sectionId: "voice.emotion", priority: "optional", content: "情绪", source: "character", trust: "core", purpose: "instruction" },
+      { sectionId: "voice.work", priority: "contextual", content: "工作", source: "character", trust: "core", purpose: "instruction" },
       { sectionId: "voice.avoid", priority: "required", content: "克制", source: "character", trust: "core", purpose: "instruction" },
     ],
   },
@@ -86,6 +89,8 @@ describe("assembleSelfRequest", () => {
     ["empty section ID", { sectionId: "" }],
     ["missing priority", { priority: undefined }],
     ["unknown priority", { priority: "emergency" }],
+    ["section from another region", { sectionId: "voice.baseline" }],
+    ["priority that contradicts Core policy", { priority: "optional" }],
   ] as const)("rejects a poisoned persona with %s", (_label, poison) => {
     const input = requestInput();
     const fragment = {
@@ -140,6 +145,8 @@ describe("assembleSelfRequest", () => {
     mutableInput.capabilities.descriptions[0] = "changed capability";
 
     expect(assembled.persona.identity[0]?.content).toBe(original.identity);
+    expect(assembled.persona.identity[0]?.sectionId).toBe("identity.self");
+    expect(assembled.persona.identity[0]?.priority).toBe("required");
     expect(assembled.persona.values[0]?.content).toBe(original.value);
     expect(assembled.persona.boundaries[0]?.content).toBe(original.boundary);
     expect(assembled.persona.voice[0]?.content).toBe(original.voice);
@@ -179,6 +186,8 @@ describe("assembleSelfRequest", () => {
     expect(assembled.evidence[0]).toBe(input.evidence[0]);
 
     expect(Reflect.set(assembled.turnInput, "content", "forged")).toBe(false);
+    expect(Reflect.set(assembled.persona.identity[0]!, "sectionId", "voice.baseline")).toBe(false);
+    expect(Reflect.set(assembled.persona.identity[0]!, "priority", "optional")).toBe(false);
     expect(() =>
       (assembled.state.self.currentConcerns as unknown as string[]).push("forged"),
     ).toThrow(TypeError);
@@ -188,32 +197,179 @@ describe("assembleSelfRequest", () => {
 });
 
 describe("applyContextBudget", () => {
-  it("deterministically trims only permitted brief regions", () => {
+  it("never removes required voice fragments", () => {
     const request = requestInput();
-    const budgeted = applyContextBudget(request, { memories: 1, voice: 1, sharedProjects: 1 });
+    const budgeted = applyContextBudget(request, {
+      memories: 1,
+      voice: 2,
+      sharedProjects: 1,
+      contextualPersonaSections: [],
+    });
 
     expect(budgeted.persona.identity).toEqual(request.persona.identity);
     expect(budgeted.persona.boundaries).toEqual(request.persona.boundaries);
     expect(budgeted.turnInput).toEqual(request.turnInput);
     expect(budgeted.evidence).toEqual(request.evidence);
-    expect(budgeted.persona.voice.map(({ content }) => content)).toEqual(["温和"]);
+    expect(budgeted.persona.voice.map(({ sectionId }) => sectionId)).toEqual([
+      "voice.baseline",
+      "voice.avoid",
+    ]);
     expect(budgeted.state.relationship.sharedProjects).toEqual(["项目 A"]);
     expect(budgeted.memories.map(({ id }) => id)).toEqual(["memory-1"]);
   });
 
-  it("treats negative budgets as zero", () => {
-    const budgeted = applyContextBudget(requestInput(), { memories: -1, voice: -1, sharedProjects: -1 });
+  it("rejects duplicate or non-canonical persona sections", () => {
+    const input = requestInput();
+    const fragment = input.persona.identity[0]!;
+    const duplicate = {
+      ...input,
+      persona: { ...input.persona, identity: [fragment, { ...fragment }] },
+    } as SelfRequest;
 
-    expect(budgeted.persona.voice).toEqual([]);
-    expect(budgeted.state.relationship.sharedProjects).toEqual([]);
-    expect(budgeted.memories).toEqual([]);
+    expect(() => assembleSelfRequest(duplicate)).toThrowError(
+      "persona_instruction_invalid",
+    );
+  });
+
+  it("fails closed when required voice cannot fit", () => {
+    expect(() =>
+      applyContextBudget(requestInput(), {
+        memories: 1,
+        voice: 1,
+        sharedProjects: 1,
+        contextualPersonaSections: [],
+      }),
+    ).toThrowError("context_budget_required_persona_exceeded");
+  });
+
+  it("prefers explicitly enabled work context before optional voice", () => {
+    const budgeted = applyContextBudget(requestInput(), {
+      memories: 1,
+      voice: 3,
+      sharedProjects: 1,
+      contextualPersonaSections: ["voice.work"],
+    });
+
+    expect(budgeted.persona.voice.map(({ sectionId }) => sectionId)).toEqual([
+      "voice.baseline",
+      "voice.work",
+      "voice.avoid",
+    ]);
+  });
+
+  it("uses optional voice in canonical order when no context is enabled", () => {
+    const budgeted = applyContextBudget(requestInput(), {
+      memories: 1,
+      voice: 4,
+      sharedProjects: 1,
+      contextualPersonaSections: [],
+    });
+
+    expect(budgeted.persona.voice.map(({ sectionId }) => sectionId)).toEqual([
+      "voice.baseline",
+      "voice.address",
+      "voice.emotion",
+      "voice.avoid",
+    ]);
+  });
+
+  it("never includes contextual voice unless explicitly enabled", () => {
+    const budgeted = applyContextBudget(requestInput(), {
+      memories: 2,
+      voice: 5,
+      sharedProjects: 2,
+      contextualPersonaSections: [],
+    });
+
+    expect(budgeted.persona.voice.map(({ sectionId }) => sectionId)).not.toContain("voice.work");
+  });
+
+  it.each([
+    ["duplicate contextual IDs", ["voice.work", "voice.work"]],
+    ["unknown contextual IDs", ["voice.unknown"]],
+  ])("rejects %s", (_label, contextualPersonaSections) => {
+    expect(() =>
+      applyContextBudget(requestInput(), {
+        memories: 1,
+        voice: 5,
+        sharedProjects: 1,
+        contextualPersonaSections,
+      } as never),
+    ).toThrowError("context_budget_persona_invalid");
+  });
+
+  it.each(
+    ["memories", "voice", "sharedProjects"].flatMap((field) =>
+      [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5, Number.MAX_SAFE_INTEGER + 1].map(
+        (invalid) => [field, invalid] as const,
+      ),
+    ),
+  )(
+    "rejects invalid %s budget %s",
+    (field, invalid) => {
+      const budget = {
+        memories: 1,
+        voice: 5,
+        sharedProjects: 1,
+        contextualPersonaSections: [],
+        [field]: invalid,
+      };
+      expect(() =>
+        applyContextBudget(requestInput(), budget),
+      ).toThrowError("context_budget_persona_invalid");
+    },
+  );
+
+  it("rejects a persona that omits a required voice section", () => {
+    const request = requestInput();
+    const missingAvoid = {
+      ...request,
+      persona: {
+        ...request.persona,
+        voice: request.persona.voice.filter(({ sectionId }) => sectionId !== "voice.avoid"),
+      },
+    };
+
+    expect(() =>
+      applyContextBudget(missingAvoid, {
+        memories: 1,
+        voice: 5,
+        sharedProjects: 1,
+        contextualPersonaSections: [],
+      }),
+    ).toThrowError("context_budget_persona_invalid");
+  });
+
+  it("rejects caller-supplied voice priority instead of trusting it", () => {
+    const request = requestInput();
+    const poisoned = {
+      ...request,
+      persona: {
+        ...request.persona,
+        voice: request.persona.voice.map((fragment) =>
+          fragment.sectionId === "voice.work"
+            ? { ...fragment, priority: "optional" as const }
+            : fragment,
+        ),
+      },
+    };
+
+    expect(() =>
+      applyContextBudget(poisoned, {
+        memories: 1,
+        voice: 5,
+        sharedProjects: 1,
+        contextualPersonaSections: ["voice.work"],
+      }),
+    ).toThrowError("context_budget_persona_invalid");
   });
 
   it("keeps the budgeted request deeply frozen", () => {
     const budgeted = applyContextBudget(requestInput(), {
       memories: 1,
-      voice: 1,
+      voice: 2,
       sharedProjects: 1,
+      contextualPersonaSections: [],
     });
 
     expect(Object.isFrozen(budgeted)).toBe(true);

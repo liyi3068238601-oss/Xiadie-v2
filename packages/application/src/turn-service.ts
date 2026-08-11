@@ -1,10 +1,11 @@
-import type {
-  BuildMetadata,
-  CommittedTurnRecord,
-  SelfRequest,
-  TurnId,
-  VerifiedExecutionRef,
-  VerifiedTurnRecord,
+import {
+  computePersonaInstructionHash,
+  type BuildMetadata,
+  type CommittedTurnRecord,
+  type SelfRequest,
+  type TurnId,
+  type VerifiedExecutionRef,
+  type VerifiedTurnRecord,
 } from "@xiadie/xiadie-core";
 import type { AgentRuntime } from "@xiadie/agent-runtime";
 import type {
@@ -98,7 +99,7 @@ export interface TurnServiceDependencies {
     request: SelfRequest,
     evidence: SelfRequest["evidence"],
   ) => SelfRequest;
-  readonly build: BuildMetadata;
+  readonly build: Omit<BuildMetadata, "personaInstructionHash">;
   readonly conversations: ConversationStore;
   readonly checkpoints: CheckpointStore;
 }
@@ -336,7 +337,10 @@ export class TurnService {
       finalResponseId,
       executions,
       timestamp: Date.now(),
-      build: this.dependencies.build,
+      build: Object.freeze({
+        ...this.dependencies.build,
+        personaInstructionHash: computePersonaInstructionHash(initial.persona),
+      }),
     };
     const committed = this.dependencies.conversations.commit(record);
     if (checkpointOwner !== undefined) {

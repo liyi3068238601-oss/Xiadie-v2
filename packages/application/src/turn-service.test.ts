@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   asTurnId,
+  computePersonaInstructionHash,
   type BuildMetadata,
   type CommittedTurnRecord,
   type SelfRequest,
@@ -22,6 +23,7 @@ import {
   InMemoryCheckpointStore,
   InMemoryConversationStore,
   TurnService,
+  applyContextBudget,
   type ConversationStore,
   type TurnRunResult,
 } from "./index.js";
@@ -37,9 +39,10 @@ void assertTurnRunResultIsReadonly;
 
 const turnId = asTurnId("turn-1");
 
-const build: BuildMetadata = {
+const build: Omit<BuildMetadata, "personaInstructionHash"> = {
   coreVersion: "0.0.0",
   characterVersion: "0.0.0",
+  characterAssetHash: "asset-hash",
   personaCompilerVersion: "0.0.0",
   schema: {
     conversation: 1,
@@ -47,6 +50,11 @@ const build: BuildMetadata = {
     relationship: 1,
     runtimeCheckpoint: 1,
   },
+};
+
+const committedBuild: BuildMetadata = {
+  ...build,
+  personaInstructionHash: "persona-hash",
 };
 
 const policy = {
@@ -349,10 +357,51 @@ describe("TurnService", () => {
     expect(result.committed.userMessageId).toBe("turn-1:user:0");
     expect(result.committed.finalResponseId).toBe("self-event-2");
     expect(result.committed.executions).toEqual([]);
+    expect(result.committed.build.characterAssetHash).toBe("asset-hash");
+    expect(result.committed.build.personaInstructionHash).toBe(
+      computePersonaInstructionHash(self.requests[0]!.persona),
+    );
     expect((setup.agent as RecordingAgent).tasks).toEqual([]);
     expect((setup.conversations as RecordingConversationStore).attempts).toHaveLength(1);
     expect(self.requests).toHaveLength(1);
     expect(self.requests[0]?.turnId).toBe(turnId);
+  });
+
+  it("hashes the exact budgeted persona returned by the initial request factory", async () => {
+    const rich = createRichRequest(turnId, "hello");
+    const full: SelfRequest = {
+      ...rich,
+      persona: {
+        ...rich.persona,
+        voice: [
+          { sectionId: "voice.baseline", priority: "required", content: "baseline", source: "character", trust: "core", purpose: "instruction" },
+          { sectionId: "voice.address", priority: "optional", content: "address", source: "character", trust: "core", purpose: "instruction" },
+          { sectionId: "voice.emotion", priority: "optional", content: "emotion", source: "character", trust: "core", purpose: "instruction" },
+          { sectionId: "voice.work", priority: "contextual", content: "work", source: "character", trust: "core", purpose: "instruction" },
+          { sectionId: "voice.avoid", priority: "required", content: "avoid", source: "character", trust: "core", purpose: "instruction" },
+        ],
+      },
+    };
+    const budgeted = applyContextBudget(full, {
+      memories: 1,
+      voice: 2,
+      sharedProjects: 1,
+      contextualPersonaSections: [],
+    });
+    const self = new ScriptedSelf([[started(), final("direct answer")]]);
+    const setup = createService({ self, createInitialRequest: () => budgeted });
+
+    const result = await setup.service.run({
+      conversationId: "conversation-1",
+      userMessage: "hello",
+    });
+
+    expect(result.committed.build.personaInstructionHash).toBe(
+      computePersonaInstructionHash(self.requests[0]!.persona),
+    );
+    expect(result.committed.build.personaInstructionHash).not.toBe(
+      computePersonaInstructionHash(full.persona),
+    );
   });
 
   it("rejects an initial request that replaces the user message", async () => {
@@ -1219,7 +1268,7 @@ describe("InMemoryConversationStore", () => {
     finalResponseId: "final-1",
     executions: [],
     timestamp: 1,
-    build,
+    build: committedBuild,
   });
 
   it("reports whether a turn is already committed", () => {
@@ -1253,7 +1302,7 @@ describe("InMemoryConversationStore", () => {
 
     const retried = store.commit({
       ...record(),
-      build: { ...build, schema: reorderedSchema },
+      build: { ...committedBuild, schema: reorderedSchema },
     });
 
     expect(retried).toBe(first);
@@ -1272,10 +1321,24 @@ describe("InMemoryConversationStore", () => {
       first.executions[0]!.evidenceIds.push("forged-evidence");
     }).toThrow(TypeError);
     expect(() => {
-      first.build.schema.conversation = 99;
+      (first.build.schema as { conversation: number }).conversation = 99;
     }).toThrow(TypeError);
     expect(first.executions[0]?.evidenceIds).toEqual(["evidence-1"]);
     expect(first.build.schema.conversation).toBe(1);
+  });
+
+  it("preserves audit hashes and treats hash changes as conflicts", () => {
+    const store = new InMemoryConversationStore();
+    const first = store.commit(record());
+
+    expect(first.build.characterAssetHash).toBe("asset-hash");
+    expect(first.build.personaInstructionHash).toBe("persona-hash");
+    expect(() =>
+      store.commit({
+        ...record(),
+        build: { ...committedBuild, personaInstructionHash: "different-persona-hash" },
+      }),
+    ).toThrowError("turn_commit_conflict");
   });
 
   it("rejects a conflicting payload for an already committed turn", () => {

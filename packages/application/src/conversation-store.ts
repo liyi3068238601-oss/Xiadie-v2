@@ -23,6 +23,8 @@ const canonicalPayload = (record: VerifiedTurnRecord): VerifiedTurnRecord => ({
   build: {
     coreVersion: record.build.coreVersion,
     characterVersion: record.build.characterVersion,
+    characterAssetHash: record.build.characterAssetHash,
+    personaInstructionHash: record.build.personaInstructionHash,
     personaCompilerVersion: record.build.personaCompilerVersion,
     schema: {
       conversation: record.build.schema.conversation,

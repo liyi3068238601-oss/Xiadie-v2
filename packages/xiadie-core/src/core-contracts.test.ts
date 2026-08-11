@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { asTurnId, createVerifiedTurnRecord } from "./index.js";
 import type {
+  BuildMetadata,
   CompiledPersona,
   PersonaInstructionFragment,
   SelfRequest,
   VerifiedExecutionReport,
 } from "./index.js";
+
+const assertBuildMetadataIsReadonly = (build: BuildMetadata): void => {
+  // @ts-expect-error Character asset provenance cannot be rewritten.
+  build.characterAssetHash = "forged";
+  // @ts-expect-error Per-turn persona provenance cannot be rewritten.
+  build.personaInstructionHash = "forged";
+  // @ts-expect-error Schema versions are immutable audit metadata.
+  build.schema.conversation = 99;
+};
+
+void assertBuildMetadataIsReadonly;
 
 const unverifiedReport = {
   runId: "run-1",
@@ -134,6 +146,8 @@ describe("core contracts", () => {
       build: {
         coreVersion: "0.0.0",
         characterVersion: "0.0.0",
+        characterAssetHash: "asset-hash",
+        personaInstructionHash: "persona-hash",
         personaCompilerVersion: "0.0.0",
         schema: { conversation: 1, memory: 1, relationship: 1, runtimeCheckpoint: 1 },
       },

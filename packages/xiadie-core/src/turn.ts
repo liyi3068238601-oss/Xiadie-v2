@@ -43,10 +43,17 @@ export interface VerifiedExecutionRef {
 }
 
 export interface BuildMetadata {
-  coreVersion: string;
-  characterVersion: string;
-  personaCompilerVersion: string;
-  schema: { conversation: number; memory: number; relationship: number; runtimeCheckpoint: number };
+  readonly coreVersion: string;
+  readonly characterVersion: string;
+  readonly characterAssetHash: string;
+  readonly personaInstructionHash: string;
+  readonly personaCompilerVersion: string;
+  readonly schema: {
+    readonly conversation: number;
+    readonly memory: number;
+    readonly relationship: number;
+    readonly runtimeCheckpoint: number;
+  };
 }
 
 export interface VerifiedTurnRecord {
