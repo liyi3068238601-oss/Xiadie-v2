@@ -1,5 +1,6 @@
 export * from "./delegate-validator.js";
 export * from "./checkpoint-store.js";
+export * from "./character-asset-loader.js";
 export * from "./conversation-store.js";
 export * from "./context-budgeter.js";
 export * from "./execution-verifier.js";
