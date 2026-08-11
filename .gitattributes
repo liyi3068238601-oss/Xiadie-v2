@@ -1,0 +1,3 @@
+packages/xiadie-core/character/**/*.md text eol=lf
+packages/xiadie-core/character/**/manifest.json text eol=lf
+tests/fixtures/*.json text eol=lf

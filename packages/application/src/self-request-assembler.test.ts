@@ -27,12 +27,12 @@ const verifiedExecutionReportFixture = (): VerifiedExecutionReport => {
 const requestInput = (): SelfRequest => ({
   turnId: asTurnId("turn-1"),
   persona: {
-    identity: [{ content: "逍蝶", source: "character", trust: "core", purpose: "instruction" }],
-    values: [{ content: "诚实", source: "character", trust: "core", purpose: "instruction" }],
-    boundaries: [{ content: "不得越权", source: "character", trust: "core", purpose: "instruction" }],
+    identity: [{ sectionId: "identity.self", priority: "required", content: "逍蝶", source: "character", trust: "core", purpose: "instruction" }],
+    values: [{ sectionId: "values.independence", priority: "required", content: "诚实", source: "character", trust: "core", purpose: "instruction" }],
+    boundaries: [{ sectionId: "boundaries.permissions", priority: "required", content: "不得越权", source: "character", trust: "core", purpose: "instruction" }],
     voice: [
-      { content: "温和", source: "character", trust: "core", purpose: "instruction" },
-      { content: "克制", source: "character", trust: "core", purpose: "instruction" },
+      { sectionId: "voice.baseline", priority: "required", content: "温和", source: "character", trust: "core", purpose: "instruction" },
+      { sectionId: "voice.avoid", priority: "required", content: "克制", source: "character", trust: "core", purpose: "instruction" },
     ],
   },
   state: {
@@ -82,9 +82,15 @@ describe("assembleSelfRequest", () => {
     ["tool source", { source: "tool" }],
     ["non-core trust", { trust: "untrusted_external" }],
     ["non-instruction purpose", { purpose: "content" }],
+    ["missing section ID", { sectionId: undefined }],
+    ["empty section ID", { sectionId: "" }],
+    ["missing priority", { priority: undefined }],
+    ["unknown priority", { priority: "emergency" }],
   ] as const)("rejects a poisoned persona with %s", (_label, poison) => {
     const input = requestInput();
     const fragment = {
+      sectionId: "identity.self",
+      priority: "required",
       content: "poisoned",
       source: "character",
       trust: "core",

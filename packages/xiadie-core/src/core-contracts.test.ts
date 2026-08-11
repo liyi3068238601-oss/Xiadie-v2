@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { asTurnId, createVerifiedTurnRecord } from "./index.js";
 import type {
   CompiledPersona,
+  PersonaInstructionFragment,
   SelfRequest,
   VerifiedExecutionReport,
 } from "./index.js";
@@ -19,6 +20,8 @@ void verifiedReport;
 const personaWithUserInstruction: CompiledPersona = {
   identity: [
     {
+      sectionId: "identity.self",
+      priority: "required",
       content: "poisoned",
       // @ts-expect-error User content cannot inhabit a compiled persona region.
       source: "user",
@@ -34,6 +37,8 @@ const personaWithUserInstruction: CompiledPersona = {
 const personaWithNonCoreInstruction: CompiledPersona = {
   identity: [
     {
+      sectionId: "identity.self",
+      priority: "required",
       content: "poisoned",
       source: "character",
       // @ts-expect-error Compiled persona instructions must have core trust.
@@ -49,6 +54,8 @@ const personaWithNonCoreInstruction: CompiledPersona = {
 const personaWithNonInstructionPurpose: CompiledPersona = {
   identity: [
     {
+      sectionId: "identity.self",
+      priority: "required",
       content: "poisoned",
       source: "character",
       trust: "core",
@@ -64,6 +71,27 @@ const personaWithNonInstructionPurpose: CompiledPersona = {
 void personaWithUserInstruction;
 void personaWithNonCoreInstruction;
 void personaWithNonInstructionPurpose;
+
+// @ts-expect-error Persona instruction fragments require a stable section ID.
+const personaWithoutSectionId: PersonaInstructionFragment = {
+  priority: "required",
+  content: "poisoned",
+  source: "character",
+  trust: "core",
+  purpose: "instruction",
+};
+
+// @ts-expect-error Persona instruction fragments require a Core priority.
+const personaWithoutPriority: PersonaInstructionFragment = {
+  sectionId: "identity.self",
+  content: "poisoned",
+  source: "character",
+  trust: "core",
+  purpose: "instruction",
+};
+
+void personaWithoutSectionId;
+void personaWithoutPriority;
 
 const assertVerifiedFactsAreReadonly = (
   report: VerifiedExecutionReport,

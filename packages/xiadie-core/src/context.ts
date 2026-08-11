@@ -2,6 +2,7 @@ import type { TurnId } from "./ids.js";
 
 export type ContextPurpose = "instruction" | "state" | "evidence" | "content";
 export type ContextTrust = "core" | "verified" | "user_supplied" | "untrusted_external";
+export type PersonaSectionPriority = "required" | "contextual" | "optional";
 
 export interface ContextFragment {
   readonly content: string;
@@ -11,6 +12,8 @@ export interface ContextFragment {
 }
 
 export interface PersonaInstructionFragment extends ContextFragment {
+  readonly sectionId: string;
+  readonly priority: PersonaSectionPriority;
   readonly source: "character";
   readonly trust: "core";
   readonly purpose: "instruction";

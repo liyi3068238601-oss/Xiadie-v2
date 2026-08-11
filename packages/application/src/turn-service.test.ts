@@ -77,6 +77,8 @@ const createRichRequest = (id: TurnId, userMessage: string): SelfRequest => ({
   persona: {
     identity: [
       {
+        sectionId: "identity.self",
+        priority: "required",
         content: "逍蝶",
         source: "character",
         trust: "core",
@@ -86,6 +88,8 @@ const createRichRequest = (id: TurnId, userMessage: string): SelfRequest => ({
     values: [],
     boundaries: [
       {
+        sectionId: "boundaries.permissions",
+        priority: "required",
         content: "不得越权",
         source: "character",
         trust: "core",
@@ -877,6 +881,8 @@ describe("TurnService", () => {
               ...request.persona,
               identity: [
                 {
+                  sectionId: "identity.self",
+                  priority: "required",
                   content: "different but structurally trusted persona",
                   source: "character",
                   trust: "core",

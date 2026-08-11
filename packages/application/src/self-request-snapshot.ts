@@ -22,6 +22,11 @@ const isPersonaInstruction = (
 ): value is PersonaInstructionFragment =>
   typeof value === "object" &&
   value !== null &&
+  typeof (value as { sectionId?: unknown }).sectionId === "string" &&
+  (value as { sectionId: string }).sectionId.length > 0 &&
+  ((value as { priority?: unknown }).priority === "required" ||
+    (value as { priority?: unknown }).priority === "contextual" ||
+    (value as { priority?: unknown }).priority === "optional") &&
   typeof (value as { content?: unknown }).content === "string" &&
   (value as { source?: unknown }).source === "character" &&
   (value as { trust?: unknown }).trust === "core" &&
@@ -50,6 +55,8 @@ const freezePersonaRegion = (
   Object.freeze(
     fragments.map((fragment) =>
       Object.freeze({
+        sectionId: fragment.sectionId,
+        priority: fragment.priority,
         content: fragment.content,
         source: fragment.source,
         trust: fragment.trust,
