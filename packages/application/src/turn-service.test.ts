@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHARACTER_ASSET_SECTIONS,
+  PERSONA_SECTION_POLICY,
   asTurnId,
   computePersonaInstructionHash,
   type BuildMetadata,
   type CommittedTurnRecord,
+  type PersonaInstructionFragment,
   type SelfRequest,
   type TurnId,
   type VerifiedTurnRecord,
@@ -63,13 +66,29 @@ const policy = {
   workspaceRoot: "E:\\Xiadie",
 };
 
+const personaFragment = (sectionId: string): PersonaInstructionFragment => ({
+  sectionId,
+  priority: PERSONA_SECTION_POLICY[sectionId as keyof typeof PERSONA_SECTION_POLICY],
+  content: `${sectionId} content`,
+  source: "character",
+  trust: "core",
+  purpose: "instruction",
+});
+
+const completePersona = (): SelfRequest["persona"] => ({
+  identity: CHARACTER_ASSET_SECTIONS.identity.map(personaFragment),
+  values: CHARACTER_ASSET_SECTIONS.values.map(personaFragment),
+  boundaries: CHARACTER_ASSET_SECTIONS.boundaries.map(personaFragment),
+  voice: CHARACTER_ASSET_SECTIONS.voice.map(personaFragment),
+});
+
 const createRequest = (
   id: TurnId,
   userMessage: string,
   evidence: SelfRequest["evidence"] = [],
 ): SelfRequest => ({
   turnId: id,
-  persona: { identity: [], values: [], boundaries: [], voice: [] },
+  persona: completePersona(),
   state: {
     self: { currentConcerns: [] },
     relationship: { sharedProjects: [] },
@@ -83,28 +102,15 @@ const createRequest = (
 const createRichRequest = (id: TurnId, userMessage: string): SelfRequest => ({
   ...createRequest(id, userMessage),
   persona: {
-    identity: [
-      {
-        sectionId: "identity.self",
-        priority: "required",
-        content: "逍蝶",
-        source: "character",
-        trust: "core",
-        purpose: "instruction",
-      },
-    ],
-    values: [],
-    boundaries: [
-      {
-        sectionId: "boundaries.permissions",
-        priority: "required",
-        content: "不得越权",
-        source: "character",
-        trust: "core",
-        purpose: "instruction",
-      },
-    ],
-    voice: [],
+    ...completePersona(),
+    identity: completePersona().identity.map((fragment) =>
+      fragment.sectionId === "identity.self" ? { ...fragment, content: "逍蝶" } : fragment,
+    ),
+    boundaries: completePersona().boundaries.map((fragment) =>
+      fragment.sectionId === "boundaries.permissions"
+        ? { ...fragment, content: "不得越权" }
+        : fragment,
+    ),
   },
   state: {
     self: { currentConcerns: ["finish the turn"] },

@@ -45,6 +45,7 @@ export const assertPersonaInstructions = (
     const fragments = candidate[region];
     if (!Array.isArray(fragments)) invalidPersona();
     const allowedSections = CHARACTER_ASSET_SECTIONS[region] as readonly string[];
+    const presentSections = new Set<string>();
     let previousIndex = -1;
     for (const fragment of fragments as unknown[]) {
       if (!isPersonaInstruction(fragment)) {
@@ -59,7 +60,16 @@ export const assertPersonaInstructions = (
       ) {
         invalidPersona();
       }
+      presentSections.add(instruction.sectionId);
       previousIndex = sectionIndex;
+    }
+    for (const sectionId of allowedSections) {
+      if (
+        PERSONA_SECTION_POLICY[sectionId as keyof typeof PERSONA_SECTION_POLICY] === "required" &&
+        !presentSections.has(sectionId)
+      ) {
+        invalidPersona();
+      }
     }
   }
 };

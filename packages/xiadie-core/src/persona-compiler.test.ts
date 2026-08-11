@@ -190,7 +190,54 @@ describe("compileCharacter", () => {
     );
 
     expect(() => compileCharacter({ ...input, manifest: { ...input.manifest, files }, documents }))
-      .toThrowError("character_manifest_invalid");
+      .toThrowError("persona_compile_invalid");
+  });
+
+  it("classifies a noncanonical asset kind with the Compiler-specific code", () => {
+    const input = assets();
+    const files = input.manifest.files.map((file, index) =>
+      index === 0 ? { ...file, kind: "values" as const } : file,
+    );
+
+    expect(() => compileCharacter({ ...input, manifest: { ...input.manifest, files } }))
+      .toThrowError("character_asset_kind_invalid");
+  });
+
+  it("parses a near-limit section with many leading blank lines in linear time", () => {
+    const input = assets();
+    const identity = input.documents.find((item) => item.kind === "identity")!;
+    const content = identity.content.replace(
+      "identity.self content",
+      `${"\n".repeat(20_000)}identity.self content`,
+    );
+    const startedAt = performance.now();
+
+    const compiled = compileCharacter(replaceDocument(input, "identity", content));
+
+    expect(compiled.persona.identity[0]?.content).toBe("identity.self content");
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it("does not repeatedly shift section buffers while trimming blank lines", () => {
+    const input = assets();
+    const identity = input.documents.find((item) => item.kind === "identity")!;
+    const content = identity.content.replace(
+      "identity.self content",
+      `${"\n".repeat(20)}identity.self content`,
+    );
+    const originalShift = Array.prototype.shift;
+    let shiftCalls = 0;
+    Array.prototype.shift = function <T>(this: T[]): T | undefined {
+      shiftCalls += 1;
+      return originalShift.call(this) as T | undefined;
+    };
+    try {
+      compileCharacter(replaceDocument(input, "identity", content));
+    } finally {
+      Array.prototype.shift = originalShift;
+    }
+
+    expect(shiftCalls).toBe(0);
   });
 
   it("returns deterministic deeply frozen snapshots", () => {

@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CHARACTER_ASSET_ORDER,
@@ -11,6 +13,7 @@ import {
 } from "@xiadie/xiadie-core";
 import {
   loadCharacterAssets,
+  nodeCharacterAssetIO,
   type CharacterAssetIO,
 } from "./index.js";
 
@@ -31,12 +34,14 @@ class MemoryCharacterAssetIO implements CharacterAssetIO {
   readonly roots = new Set<string>();
   readonly redirects = new Map<string, string>();
   readonly readPaths: string[] = [];
+  readonly readLimits: number[] = [];
 
-  async readFile(path: string): Promise<Uint8Array> {
+  async readFile(path: string, maxBytes: number): Promise<Uint8Array> {
     this.readPaths.push(path);
+    this.readLimits.push(maxBytes);
     const bytes = this.files.get(path);
     if (bytes === undefined) throw new Error("ENOENT");
-    return bytes;
+    return bytes.slice(0, maxBytes + 1);
   }
 
   async realpath(path: string): Promise<string> {
@@ -138,6 +143,15 @@ describe("loadCharacterAssets", () => {
     expect(Object.isFrozen(loaded.documents)).toBe(true);
     expect(Object.isFrozen(loaded.documents[0])).toBe(true);
     expect(Object.isFrozen(loaded.documents[0]?.sections)).toBe(true);
+    expect(input.io.readLimits).toEqual([
+      64 * 1024,
+      64 * 1024,
+      64 * 1024,
+      64 * 1024,
+      64 * 1024,
+      256 * 1024,
+      128 * 1024,
+    ]);
   });
 
   it("rejects reordered Manifest files", async () => {
@@ -206,6 +220,31 @@ describe("loadCharacterAssets", () => {
     const loaded = await loadCharacterAssets(input.root, input.io);
     expect(loaded.documents[0]?.content).toBe(input.contents.identity);
     expect(loaded.documents[0]?.sha256).toBe(sha256Text(input.contents.identity));
+  });
+
+  it("removes exactly one BOM so Loader and generator canonicalization agree", async () => {
+    const input = fixture();
+    const canonical = `\uFEFF${input.contents.identity}`;
+    replaceAsset(input, "identity", encoder.encode(`\uFEFF${canonical}`), canonical);
+
+    const loaded = await loadCharacterAssets(input.root, input.io);
+
+    expect(loaded.documents[0]?.content).toBe(canonical);
+    expect(loaded.documents[0]?.sha256).toBe(sha256Text(canonical));
+  });
+
+  it("reads at most limit plus one bytes from a real oversized file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "xiadie-character-loader-"));
+    const path = join(directory, "oversized.md");
+    try {
+      await writeFile(path, new Uint8Array(1024 * 1024));
+
+      const bytes = await nodeCharacterAssetIO.readFile(path, 1024);
+
+      expect(bytes.byteLength).toBe(1025);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it.each([

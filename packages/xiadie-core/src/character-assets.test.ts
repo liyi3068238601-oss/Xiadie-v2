@@ -34,6 +34,9 @@ describe("Character Asset Schema 1", () => {
     expect(CHARACTER_ASSET_SECTIONS.voice).toEqual([
       "voice.baseline", "voice.address", "voice.emotion", "voice.work", "voice.avoid",
     ]);
+    expect(Object.isFrozen(CHARACTER_ASSET_ORDER)).toBe(true);
+    expect(() => (CHARACTER_ASSET_ORDER as unknown as string[]).reverse()).toThrow(TypeError);
+    expect(CHARACTER_ASSET_ORDER[0]).toBe("identity");
   });
 
   it("matches the standard SHA-256 test vector", () => {

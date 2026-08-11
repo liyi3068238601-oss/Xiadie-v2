@@ -334,6 +334,12 @@ canonical JSON 由 Loader 重新构造，不使用输入 JSON 的属性顺序或
 - `canon.md`：256 KiB；
 - `examples.md`：128 KiB。
 
+大小限制同时是资源安全边界，而不只是解码后的校验。Application 的
+`CharacterAssetIO.readFile(path, maxBytes)` 必须最多读取并返回
+`maxBytes + 1` 字节；Loader 以第 `maxBytes + 1` 字节判定超限，禁止先把
+任意大小的文件完整读入内存再检查长度。Node 实现使用已打开的文件句柄循环
+有界读取，且无论成功或失败都关闭句柄。
+
 Loader 返回的对象必须深层冻结或复制到不可被调用方后续修改的快照。错误诊断不得包含完整人格正文。
 
 ## 12. PersonaCompiler

@@ -1,4 +1,4 @@
-import { readFile, realpath } from "node:fs/promises";
+import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 import {
@@ -14,11 +14,35 @@ import {
 } from "@xiadie/xiadie-core";
 
 export interface CharacterAssetIO {
-  readonly readFile: (path: string) => Promise<Uint8Array>;
+  readonly readFile: (path: string, maxBytes: number) => Promise<Uint8Array>;
   readonly realpath: (path: string) => Promise<string>;
 }
 
-export const nodeCharacterAssetIO: CharacterAssetIO = { readFile, realpath };
+const readFileBounded = async (path: string, maxBytes: number): Promise<Uint8Array> => {
+  const handle = await open(path, "r");
+  try {
+    const buffer = new Uint8Array(maxBytes + 1);
+    let offset = 0;
+    while (offset < buffer.byteLength) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        offset,
+        buffer.byteLength - offset,
+        offset,
+      );
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    return buffer.slice(0, offset);
+  } finally {
+    await handle.close();
+  }
+};
+
+export const nodeCharacterAssetIO: CharacterAssetIO = {
+  readFile: readFileBounded,
+  realpath,
+};
 
 const fileSchema = z.object({
   kind: z.enum(CHARACTER_ASSET_ORDER),
@@ -46,7 +70,7 @@ const LIMITS = {
 
 const decode = (bytes: Uint8Array): string => {
   try {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
     if (text.includes("\0")) throw new Error();
     return normalizeCharacterText(text);
   } catch {
@@ -100,7 +124,7 @@ export const loadCharacterAssets = async (
 
   let manifestBytes: Uint8Array;
   try {
-    manifestBytes = new Uint8Array(await io.readFile(actualManifestPath));
+    manifestBytes = new Uint8Array(await io.readFile(actualManifestPath, LIMITS.manifest));
   } catch {
     throw new Error("character_manifest_read_failed");
   }
@@ -147,7 +171,7 @@ export const loadCharacterAssets = async (
 
     let bytes: Uint8Array;
     try {
-      bytes = new Uint8Array(await io.readFile(actual));
+      bytes = new Uint8Array(await io.readFile(actual, LIMITS[kind]));
     } catch {
       throw new Error("character_asset_missing");
     }

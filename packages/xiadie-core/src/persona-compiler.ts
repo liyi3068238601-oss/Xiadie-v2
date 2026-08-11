@@ -58,10 +58,12 @@ const parseDocument = (content: string): readonly ParsedSection[] => {
 
   const flush = (): void => {
     if (sectionId === undefined) return;
-    while (buffer[0] === "") buffer.shift();
-    while (buffer.at(-1) === "") buffer.pop();
-    if (buffer.length === 0) fail("character_section_empty");
-    sections.push({ sectionId, content: buffer.join("\n") });
+    let start = 0;
+    let end = buffer.length;
+    while (start < end && buffer[start] === "") start += 1;
+    while (end > start && buffer[end - 1] === "") end -= 1;
+    if (start === end) fail("character_section_empty");
+    sections.push({ sectionId, content: buffer.slice(start, end).join("\n") });
     buffer = [];
   };
 
@@ -128,21 +130,22 @@ const assertCanonical = (assets: LoadedCharacterAssets): void => {
     assets.manifest.files.length !== CHARACTER_ASSET_ORDER.length ||
     assets.documents.length !== CHARACTER_ASSET_ORDER.length
   ) {
-    fail("character_manifest_invalid");
+    fail("persona_compile_invalid");
   }
 
   CHARACTER_ASSET_ORDER.forEach((kind, index) => {
     const file = assets.manifest.files[index];
     const document = assets.documents[index];
+    if (file === undefined || document === undefined || file.kind !== kind || document.kind !== kind) {
+      throw new Error("character_asset_kind_invalid");
+    }
     if (
-      file?.kind !== kind ||
-      document?.kind !== kind ||
       file.path !== CHARACTER_ASSET_PATHS[kind] ||
       document.path !== CHARACTER_ASSET_PATHS[kind] ||
       JSON.stringify(file.sections) !== JSON.stringify(CHARACTER_ASSET_SECTIONS[kind]) ||
       JSON.stringify(document.sections) !== JSON.stringify(CHARACTER_ASSET_SECTIONS[kind])
     ) {
-      fail("character_manifest_invalid");
+      fail("persona_compile_invalid");
     }
   });
 };

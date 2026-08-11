@@ -2,9 +2,9 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import type { PersonaSectionPriority } from "./context.js";
 
-export const CHARACTER_ASSET_ORDER = [
+export const CHARACTER_ASSET_ORDER = Object.freeze([
   "identity", "values", "boundaries", "voice", "canon", "examples",
-] as const;
+] as const);
 export type CharacterAssetKind = (typeof CHARACTER_ASSET_ORDER)[number];
 
 export const CHARACTER_ASSET_PATHS = Object.freeze({
