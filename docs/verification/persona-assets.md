@@ -3,8 +3,7 @@
 ## Scope
 
 - Verification date: 2026-08-11
-- Commit under test: `22b7c62e90888579f95546c1e38fc32603840714`
-  (`test: add persona evaluation and IP boundaries`)
+- Commit under test: `4f87f63` (`fix: harden persona asset trust boundaries`)
 - Construction branch: `feature/persona-assets`
 - Documentation commit: recorded in
   [the implementation ledger](../implementation-progress/persona-assets.md).
@@ -59,10 +58,10 @@ git -C 'E:\Cyrene agent\Cyrene-Agent' status --short
 | --- | --- |
 | Node version | exit `0`; `v24.16.0` |
 | pnpm version | exit `0`; `11.16.0` |
-| CI frozen install | exit `0`; all five workspace projects already up to date in 259 ms |
+| CI frozen install | exit `0`; all five workspace projects already up to date |
 | Manifest generation | exit `0` |
 | Manifest idempotence diff | exit `0`; no diff for `manifest.json` |
-| Test suite | exit `0`; 13 test files and 200 tests passed |
+| Test suite | exit `0`; 13 test files and 209 tests passed |
 | Typecheck | exit `0` |
 | Working-tree diff check | exit `0` |
 | Core dependency scan | exit `1`; no output (the expected no-match result) |
