@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "characterId": "xiadie",
-  "characterVersion": "1.0.2",
+  "characterVersion": "1.0.3",
   "files": [
     {
       "kind": "identity",
@@ -53,7 +53,7 @@
     {
       "kind": "canon",
       "path": "canon.md",
-      "sha256": "1246cf6436024cc742a48190285294e91e5ca39fdb9d16a340236bcb78485948",
+      "sha256": "17b806101f2e848c2740dcc458c9c06e2257d70a4634be6674ccc4beac8cf099",
       "sections": [
         "canon.origin",
         "canon.journey",
@@ -66,7 +66,7 @@
     {
       "kind": "examples",
       "path": "examples.md",
-      "sha256": "61118de768942eb1560b4246bc1024dc6f9756fc248f3083effdea230bf7f758",
+      "sha256": "5365494cca692836f30cf18899a3ec3d34de9dfb05dac90d9e500e99cd13bca3",
       "sections": [
         "examples.daily",
         "examples.work",

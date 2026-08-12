@@ -13,5 +13,5 @@ for (const kind of CHARACTER_ASSET_ORDER) {
   const content = normalizeCharacterText(await readFile(resolve(root, CHARACTER_ASSET_PATHS[kind]), "utf8"));
   files.push({ kind, path: CHARACTER_ASSET_PATHS[kind], sha256: sha256Text(content), sections: [...CHARACTER_ASSET_SECTIONS[kind]] });
 }
-const manifest = { schemaVersion: 1, characterId: "xiadie", characterVersion: "1.0.2", files };
+const manifest = { schemaVersion: 1, characterId: "xiadie", characterVersion: "1.0.3", files };
 await writeFile(resolve(root, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
