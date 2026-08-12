@@ -9,7 +9,7 @@ This repository currently contains the Phase 1 TypeScript foundation-contract ve
 - Application-level delegate validation, policy-constrained minimal `AgentTask` creation, partitioned Self request assembly, deterministic context budgeting, and deterministic execution verification.
 - An in-memory `TurnService`, conversation store, and checkpoint store that exercise the direct-answer and one-delegation paths.
 - Contract and orchestration tests for authorization, context, evidence, committed turns, and checkpoint lifecycle behavior.
-- Versioned Xiadie Character 1.0.0 assets with canonical Manifest validation.
+- Versioned Xiadie Character 1.0.1 assets with canonical Manifest validation.
 - A deterministic PersonaCompiler with immutable instruction/reference partitions and full/per-turn SHA-256 audit hashes.
 - Policy-aware whole-fragment Persona budgeting and a ten-category static evaluation set.
 

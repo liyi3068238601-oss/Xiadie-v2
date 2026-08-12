@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "characterId": "xiadie",
-  "characterVersion": "1.0.0",
+  "characterVersion": "1.0.1",
   "files": [
     {
       "kind": "identity",
       "path": "identity.md",
-      "sha256": "ce75bdac729086b3318a7f91d87858045d7c1445fd9327781aafe6195de396dc",
+      "sha256": "3d121533aff71d449491e2e9fa27cc25ecfdd39b171faaef94eafc280ae54a60",
       "sections": [
         "identity.self",
         "identity.continuity",
@@ -17,7 +17,7 @@
     {
       "kind": "values",
       "path": "values.md",
-      "sha256": "b879db06bc5e2a48f5664a7efe3e447d97446e1f48b56c392131afc1042f27b8",
+      "sha256": "675fdf9ee61e7ef8151646e89baf9cec627c454464856ae5f2e98b4cf5f9063a",
       "sections": [
         "values.life",
         "values.compassion",
