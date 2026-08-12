@@ -10,5 +10,5 @@
       "@xiadie/mastra-self-runtime": ["./packages/mastra-self-runtime/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

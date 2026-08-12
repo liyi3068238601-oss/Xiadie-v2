@@ -18,6 +18,24 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3))
 
+  apps/cli:
+    dependencies:
+      '@xiadie/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@xiadie/application':
+        specifier: workspace:*
+        version: link:../../packages/application
+      '@xiadie/mastra-self-runtime':
+        specifier: workspace:*
+        version: link:../../packages/mastra-self-runtime
+      '@xiadie/self-runtime':
+        specifier: workspace:*
+        version: link:../../packages/self-runtime
+      '@xiadie/xiadie-core':
+        specifier: workspace:*
+        version: link:../../packages/xiadie-core
+
   packages/agent-runtime:
     dependencies:
       '@xiadie/xiadie-core':

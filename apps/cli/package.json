@@ -1,0 +1,16 @@
+{
+  "name": "@xiadie/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "chat": "node --experimental-strip-types src/main.ts"
+  },
+  "dependencies": {
+    "@xiadie/agent-runtime": "workspace:*",
+    "@xiadie/application": "workspace:*",
+    "@xiadie/mastra-self-runtime": "workspace:*",
+    "@xiadie/self-runtime": "workspace:*",
+    "@xiadie/xiadie-core": "workspace:*"
+  }
+}
