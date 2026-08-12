@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "chat": "node --experimental-strip-types src/main.ts",
-    "persona:eval:live": "node --experimental-strip-types src/persona-eval.ts"
+    "chat": "tsx src/main.ts",
+    "persona:eval:live": "tsx src/persona-eval.ts"
   },
   "dependencies": {
     "@xiadie/agent-runtime": "workspace:*",
     "@xiadie/application": "workspace:*",
     "@xiadie/mastra-self-runtime": "workspace:*",
     "@xiadie/self-runtime": "workspace:*",
-    "@xiadie/xiadie-core": "workspace:*"
+    "@xiadie/xiadie-core": "workspace:*",
+    "tsx": "4.23.12"
   }
 }

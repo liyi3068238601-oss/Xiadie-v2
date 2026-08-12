@@ -1,12 +1,28 @@
 import { describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import type { CommittedTurnRecord } from "@xiadie/xiadie-core";
 import { parseModel, runChatTurn, type ChatTurnRunner } from "./index.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("parseModel", () => {
   it("requires provider/model syntax", () => {
     expect(() => parseModel(undefined)).toThrowError("xiadie_model_missing");
     expect(() => parseModel("gpt-5-mini")).toThrowError("xiadie_model_invalid");
     expect(parseModel("openai/gpt-5-mini")).toBe("openai/gpt-5-mini");
+  });
+});
+
+describe("CLI process", () => {
+  it("reaches fail-closed configuration validation through the production launcher", async () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    await expect(execFileAsync(
+      process.execPath,
+      ["apps/cli/node_modules/tsx/dist/cli.mjs", "apps/cli/src/main.ts", "你好"],
+      { cwd: root, env: { ...process.env, XIADIE_MODEL: "" } },
+    )).rejects.toMatchObject({ stderr: expect.stringContaining("xiadie_model_missing") });
   });
 });
 
