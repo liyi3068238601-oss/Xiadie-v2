@@ -41,7 +41,7 @@ Cover canonical persona order, separation of user/context data, deterministic st
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run: `$env:CI='true'; pnpm.cmd exec vitest run packages/mastra-self-runtime/src/mastra-self-runtime.test.ts`  
+Run: `$env:CI='true'; pnpm.cmd exec vitest run packages/mastra-self-runtime/src/mastra-self-runtime.test.ts`
 Expected: FAIL because the adapter package implementation does not exist.
 
 - [ ] **Step 3: Implement the smallest adapter and production Mastra factory**
@@ -50,10 +50,10 @@ Render only compiled persona fragments into instructions, pass the current user 
 
 - [ ] **Step 4: Verify GREEN and type safety**
 
-Run: `$env:CI='true'; pnpm.cmd exec vitest run packages/mastra-self-runtime/src/mastra-self-runtime.test.ts`  
+Run: `$env:CI='true'; pnpm.cmd exec vitest run packages/mastra-self-runtime/src/mastra-self-runtime.test.ts`
 Expected: all focused tests PASS.
 
-Run: `$env:CI='true'; pnpm.cmd typecheck`  
+Run: `$env:CI='true'; pnpm.cmd typecheck`
 Expected: exit 0.
 
 - [ ] **Step 5: Commit**
@@ -87,7 +87,7 @@ Cover invalid/missing `XIADIE_MODEL`, one committed direct-response turn, stream
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run: `$env:CI='true'; pnpm.cmd exec vitest run apps/cli/src/chat.test.ts`  
+Run: `$env:CI='true'; pnpm.cmd exec vitest run apps/cli/src/chat.test.ts`
 Expected: FAIL because CLI modules do not exist.
 
 - [ ] **Step 3: Implement configuration, bootstrap and chat loop**
@@ -124,7 +124,7 @@ Prove deterministic case order, provenance fields, JSONL shape, no implicit invo
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run: `$env:CI='true'; pnpm.cmd exec vitest run apps/cli/src/persona-eval.test.ts`  
+Run: `$env:CI='true'; pnpm.cmd exec vitest run apps/cli/src/persona-eval.test.ts`
 Expected: FAIL because the runner does not exist.
 
 - [ ] **Step 3: Implement the opt-in runner and usage documentation**
@@ -162,10 +162,10 @@ Document exact package versions, commands, scope exclusions, and live-run prereq
 
 - [ ] **Step 3: Run final gates**
 
-Run: `$env:CI='true'; pnpm.cmd character:manifest`  
-Run: `$env:CI='true'; pnpm.cmd test`  
-Run: `$env:CI='true'; pnpm.cmd typecheck`  
-Run: `git diff --check`  
+Run: `$env:CI='true'; pnpm.cmd character:manifest`
+Run: `$env:CI='true'; pnpm.cmd test`
+Run: `$env:CI='true'; pnpm.cmd typecheck`
+Run: `git diff --check`
 Expected: manifest produces no diff; all commands exit 0.
 
 - [ ] **Step 4: Commit**
@@ -174,4 +174,3 @@ Expected: manifest produces no diff; all commands exit 0.
 git add ARCHITECTURE.md docs/implementation-progress/persona-assets.md
 git commit -m "docs: record Mastra self runtime verification"
 ```
-
