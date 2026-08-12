@@ -32,3 +32,12 @@
 ## Foundation Architecture v1 冻结规则
 
 **状态：FROZEN。** 只允许修复契约缺陷、安全边界和数据完整性问题。不得因为实现方便而破坏上述边界；边界变更必须先提交独立 ADR 并经人工确认。
+
+## Phase 3A 当前实现
+
+- `@xiadie/mastra-self-runtime` 是 SelfRuntime 的首个框架适配器，精确依赖 `@mastra/core@1.57.0`。
+- 该适配器只使用无工具的 Mastra Agent 生成文本；不注册 tools、MCP、workspace、memory 或 subagents。
+- 角色 Persona 仍由 Core 的 PersonaCompiler 产生；适配器只能渲染已编译的 `character + core + instruction` 片段。
+- `apps/cli` 通过真实 Character Loader、PersonaCompiler、TurnService 与 ConversationStore 完成直接回答链路。
+- CLI 当前使用内存会话事实存储，进程退出后不恢复历史，也不开放 DelegateRequest。
+- 真实人格评测必须显式执行，不属于默认测试或 CI。
