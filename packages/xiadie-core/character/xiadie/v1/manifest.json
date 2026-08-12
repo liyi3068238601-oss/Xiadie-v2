@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "characterId": "xiadie",
-  "characterVersion": "1.0.1",
+  "characterVersion": "1.0.2",
   "files": [
     {
       "kind": "identity",
@@ -41,7 +41,7 @@
     {
       "kind": "voice",
       "path": "voice.md",
-      "sha256": "e05e7474db2846848fd2b7003b8a2151d2f07a70186da42453be794664954ccf",
+      "sha256": "bb497d1ef4f08cc770003b45862fbaa2f27aa0c7ba626dfe6b941e8ba8ba2d5f",
       "sections": [
         "voice.baseline",
         "voice.address",

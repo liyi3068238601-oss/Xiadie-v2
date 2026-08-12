@@ -5,11 +5,11 @@ import { loadCharacterAssets } from "./character-asset-loader.js";
 
 const root = fileURLToPath(new URL("../../xiadie-core/character/xiadie/v1/", import.meta.url));
 
-describe("Xiadie Character 1.0.1", () => {
+describe("Xiadie Character 1.0.2", () => {
   it("loads and compiles the repository assets", async () => {
     const loaded = await loadCharacterAssets(root);
     const compiled = compileCharacter(loaded);
-    expect(compiled.metadata.characterVersion).toBe("1.0.1");
+    expect(compiled.metadata.characterVersion).toBe("1.0.2");
     expect(compiled.persona.identity).toHaveLength(4);
     expect(compiled.persona.values).toHaveLength(5);
     expect(compiled.persona.boundaries).toHaveLength(5);
