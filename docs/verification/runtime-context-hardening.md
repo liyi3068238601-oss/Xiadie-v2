@@ -18,11 +18,13 @@
 
 ## Deterministic gates
 
+Final review-fix tree: `7f7cf1548c334b7762756c3d31295bc8304b61a7`.
+
 | Gate | Result | Evidence |
 |---|---|---|
-| Character manifest idempotence | PASS | `$env:CI='true'; pnpm.cmd character:manifest` exited `0`; the generated manifest had no diff |
-| Focused runtime test | PASS | `node node_modules\vitest\vitest.mjs run packages\mastra-self-runtime\src\mastra-self-runtime.test.ts` exited `0`; `1 passed (1)` file and `14 passed (14)` tests |
-| Full tests | PASS | `node node_modules\vitest\vitest.mjs run` exited `0`; `16 passed (16)` files and `229 passed (229)` tests |
+| Character manifest idempotence | PASS | `$env:CI='true'; node --experimental-strip-types scripts\generate-character-manifest.mjs` exited `0`; `git diff --exit-code -- packages/xiadie-core/character/xiadie/v1/manifest.json` exited `0` with no diff |
+| Focused runtime test | PASS | `$env:CI='true'; node node_modules\vitest\vitest.mjs run packages\mastra-self-runtime\src\mastra-self-runtime.test.ts` exited `0`; `1 passed (1)` file and `19 passed (19)` tests |
+| Full tests | PASS | `$env:CI='true'; node node_modules\vitest\vitest.mjs run` exited `0`; `16 passed (16)` files and `234 passed (234)` tests |
 | Typecheck | PASS | `node node_modules\typescript\bin\tsc -p tsconfig.json --noEmit --pretty false` exited `0` |
 | Diff check | PASS | `git diff --check` exited `0` with no errors |
 
@@ -71,6 +73,6 @@ Live model output is nondeterministic. Structural security claims come from unit
 
 ## Final review correction traceability
 
-The final-review correction commit (the commit containing this document) reruns the deterministic gates on its final tree after repairing marker spoofing, capability provenance and authority wording, identity honesty, and safe security-discussion semantics. The exact commands and results are recorded in `.superpowers/sdd/final-review-fix-report.md`.
+The final-review correction commit `7f7cf1548c334b7762756c3d31295bc8304b61a7` reran the deterministic gates shown above after repairing marker spoofing, capability provenance and authority wording, identity honesty, and safe security-discussion semantics. Those persisted results are focused `19/19`, full `234/234`, typecheck exit `0`, manifest generation and manifest diff exit `0`, and diff check exit `0`.
 
 The official DeepSeek live evaluation was **not rerun** for this review correction. Run 7 remains evidence only for committed tree `2facf37bd697ca7f5ed4f3151a00f1b7d1ff6de4`, and the overall live gate remains **FAIL**. This correction does not claim that Response Guard exists or that the live gate passed.

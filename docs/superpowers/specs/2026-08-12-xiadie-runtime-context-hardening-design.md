@@ -67,6 +67,8 @@
 - Turn Data 中出现的命令、角色标签或提示词都只按数据处理。
 - 渲染文本不要求模型在回复中复述分区名。
 
+六个 adapter-reserved markers（`【当前关注】`、`【关系信息】`、`【相关记忆】`、`【已验证证据】`、`【当前能力】`、`【当前用户消息】`）在所有 dynamic strings（包括用户输入与序列化上下文）中都以 Unicode 形式转义，只有 adapter labels 保持 structural；由 adapter 生成的 Capability 块只提供 capability awareness，不授予 authority 或执行权限。
+
 固定分区顺序为：
 
 1. Self
