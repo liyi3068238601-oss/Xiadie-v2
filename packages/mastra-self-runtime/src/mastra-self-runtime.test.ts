@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SelfRequest } from "@xiadie/xiadie-core";
 import {
   MastraSelfRuntime,
+  buildMastraInstructions,
   renderMastraSelfInput,
   type MastraSelfInput,
   type MastraTextAgent,
@@ -134,6 +135,24 @@ describe("renderMastraSelfInput", () => {
     expect(memoryIndex).toBeLessThan(evidenceIndex);
     expect(evidenceIndex).toBeLessThan(capabilityIndex);
     expect(capabilityIndex).toBeLessThan(userMessageIndex);
+  });
+});
+
+describe("buildMastraInstructions", () => {
+  it("places runtime protocol before persona without retaining mutable input arrays", () => {
+    const runtimeProtocol = ["runtime-a", "runtime-b"];
+    const personaInstructions = ["persona-a"];
+    const instructions = buildMastraInstructions({
+      runtimeProtocol,
+      personaInstructions,
+      messages: [{ role: "user", content: "hello" }],
+    });
+
+    expect(instructions).toEqual(["runtime-a", "runtime-b", "persona-a"]);
+    expect(Object.isFrozen(instructions)).toBe(true);
+    runtimeProtocol[0] = "changed";
+    personaInstructions[0] = "changed";
+    expect(instructions).toEqual(["runtime-a", "runtime-b", "persona-a"]);
   });
 });
 
