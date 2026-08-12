@@ -6,7 +6,7 @@ export const createMastraTextAgent = (model: `${string}/${string}`): MastraTextA
     const agent = new Agent({
       id: "xiadie-self",
       name: "Xiadie Self",
-      instructions: [...input.instructions],
+      instructions: [...input.runtimeProtocol, ...input.personaInstructions],
       model,
     });
     const output = await agent.stream([...input.messages]);
