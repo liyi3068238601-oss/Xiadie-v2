@@ -1,0 +1,12 @@
+{
+  "name": "@xiadie/mastra-self-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@mastra/core": "1.57.0",
+    "@xiadie/self-runtime": "workspace:*",
+    "@xiadie/xiadie-core": "workspace:*"
+  }
+}

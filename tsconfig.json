@@ -6,7 +6,8 @@
       "@xiadie/xiadie-core": ["./packages/xiadie-core/src/index.ts"],
       "@xiadie/self-runtime": ["./packages/self-runtime/src/index.ts"],
       "@xiadie/agent-runtime": ["./packages/agent-runtime/src/index.ts"],
-      "@xiadie/application": ["./packages/application/src/index.ts"]
+      "@xiadie/application": ["./packages/application/src/index.ts"],
+      "@xiadie/mastra-self-runtime": ["./packages/mastra-self-runtime/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
