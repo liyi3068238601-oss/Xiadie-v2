@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import type { CommittedTurnRecord } from "@xiadie/xiadie-core";
-import { parseModel, runChatTurn, type ChatTurnRunner } from "./index.js";
+import { parseCliMessage, parseModel, runChatTurn, type ChatTurnRunner } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -12,6 +12,13 @@ describe("parseModel", () => {
     expect(() => parseModel(undefined)).toThrowError("xiadie_model_missing");
     expect(() => parseModel("gpt-5-mini")).toThrowError("xiadie_model_invalid");
     expect(parseModel("openai/gpt-5-mini")).toBe("openai/gpt-5-mini");
+  });
+});
+
+describe("parseCliMessage", () => {
+  it("removes one package-manager separator from the user message", () => {
+    expect(parseCliMessage(["--", "你好", "遐蝶"])).toBe("你好 遐蝶");
+    expect(parseCliMessage(["你好", "遐蝶"])).toBe("你好 遐蝶");
   });
 });
 

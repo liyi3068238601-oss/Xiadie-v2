@@ -1,10 +1,10 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { createChatTurnRunner, parseModel, runChatTurn } from "./index.js";
+import { createChatTurnRunner, parseCliMessage, parseModel, runChatTurn } from "./index.js";
 
 const main = async (): Promise<void> => {
   const runner = await createChatTurnRunner(parseModel(process.env.XIADIE_MODEL));
-  const oneShot = process.argv.slice(2).join(" ").trim();
+  const oneShot = parseCliMessage(process.argv.slice(2));
   if (oneShot.length > 0) {
     await runChatTurn(oneShot, runner, (text) => stdout.write(text));
     return;
