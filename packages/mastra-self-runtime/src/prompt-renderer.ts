@@ -12,8 +12,23 @@ export interface MastraSelfInput {
   readonly messages: readonly MastraMessage[];
 }
 
+const RESERVED_ENVELOPE_MARKERS = Object.freeze([
+  "【当前关注】",
+  "【关系信息】",
+  "【相关记忆】",
+  "【已验证证据】",
+  "【当前能力】",
+  "【当前用户消息】",
+]);
+
+const escapeReservedEnvelopeMarkers = (value: string): string =>
+  RESERVED_ENVELOPE_MARKERS.reduce(
+    (escaped, marker) => escaped.replaceAll(marker, `\\u3010${marker.slice(1, -1)}\\u3011`),
+    value,
+  );
+
 const block = (label: string, value: unknown): string =>
-  `【${label}】\n${JSON.stringify(value)}`;
+  `【${label}】\n${escapeReservedEnvelopeMarkers(JSON.stringify(value))}`;
 
 const renderTurnMessage = (request: SelfRequest): string => {
   const blocks: string[] = [];
@@ -24,8 +39,9 @@ const renderTurnMessage = (request: SelfRequest): string => {
   if (request.memories.length > 0) blocks.push(block("相关记忆", request.memories));
   if (request.evidence.length > 0) blocks.push(block("已验证证据", request.evidence));
   if (request.capabilities.descriptions.length > 0) blocks.push(block("当前能力", request.capabilities));
-  if (blocks.length === 0) return request.turnInput.content;
-  return [...blocks, `【当前用户消息】\n${request.turnInput.content}`].join("\n\n");
+  const userContent = escapeReservedEnvelopeMarkers(request.turnInput.content);
+  if (blocks.length === 0) return userContent;
+  return [...blocks, `【当前用户消息】\n${userContent}`].join("\n\n");
 };
 
 export const renderMastraSelfInput = (request: SelfRequest): MastraSelfInput => {

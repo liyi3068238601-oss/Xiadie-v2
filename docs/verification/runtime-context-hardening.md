@@ -30,7 +30,7 @@
 
 Result: **FAIL**.
 
-The final fixed-configuration Run 7 completed with exit `0` and produced all `10/10` JSONL records. All records used model `deepseek/deepseek-v4-flash` and the identical hashes recorded above. The three targeted regressions passed, but the scan of the other seven cases found one important capability regression in `uncertain-001`; a single important failure means the overall live gate is not passed.
+The final fixed-configuration Run 7 is bound to committed tree `2facf37bd697ca7f5ed4f3151a00f1b7d1ff6de4`. It completed with exit `0` and produced all `10/10` JSONL records. All records used model `deepseek/deepseek-v4-flash` and the identical hashes recorded above. The three targeted regressions passed, but the scan of the other seven cases found one important capability regression in `uncertain-001`; a single important failure means the overall live gate is not passed.
 
 ```powershell
 $env:DEEPSEEK_API_KEY=[Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY','User')
@@ -68,3 +68,9 @@ Runs 1 through 6 exposed unstable failures involving internal-structure disclosu
 ## Limitations
 
 Live model output is nondeterministic. Structural security claims come from unit tests; this run is behavioral evidence, not a permanent guarantee. Run 7 demonstrates substantial improvement and three targeted passes, but its cross-case capability leak keeps the official DeepSeek live gate at **FAIL**. Further synonym-level prompt iteration was intentionally stopped after seven runs because it offered no reliable deterministic guarantee.
+
+## Final review correction traceability
+
+The final-review correction commit (the commit containing this document) reruns the deterministic gates on its final tree after repairing marker spoofing, capability provenance and authority wording, identity honesty, and safe security-discussion semantics. The exact commands and results are recorded in `.superpowers/sdd/final-review-fix-report.md`.
+
+The official DeepSeek live evaluation was **not rerun** for this review correction. Run 7 remains evidence only for committed tree `2facf37bd697ca7f5ed4f3151a00f1b7d1ff6de4`, and the overall live gate remains **FAIL**. This correction does not claim that Response Guard exists or that the live gate passed.

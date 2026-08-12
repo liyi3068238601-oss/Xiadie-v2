@@ -2,7 +2,7 @@
 
 日期：2026-08-12
 
-状态：待用户复核
+状态：已批准
 
 范围：`packages/mastra-self-runtime`
 
