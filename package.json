@@ -8,6 +8,7 @@
   },
   "scripts": {
     "chat": "pnpm --filter @xiadie/cli chat",
+    "persona:eval:live": "pnpm --filter @xiadie/cli persona:eval:live",
     "character:manifest": "node --experimental-strip-types scripts/generate-character-manifest.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

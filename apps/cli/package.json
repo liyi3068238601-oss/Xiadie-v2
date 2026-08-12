@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "chat": "node --experimental-strip-types src/main.ts"
+    "chat": "node --experimental-strip-types src/main.ts",
+    "persona:eval:live": "node --experimental-strip-types src/persona-eval.ts"
   },
   "dependencies": {
     "@xiadie/agent-runtime": "workspace:*",
