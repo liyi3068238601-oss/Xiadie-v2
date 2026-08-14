@@ -15,6 +15,7 @@ export interface MastraSelfInput {
 const RESERVED_ENVELOPE_MARKERS = Object.freeze([
   "【当前关注】",
   "【关系信息】",
+  "【最近对话】",
   "【相关记忆】",
   "【已验证证据】",
   "【当前能力】",
@@ -35,6 +36,9 @@ const renderTurnMessage = (request: SelfRequest): string => {
   if (request.state.self.currentConcerns.length > 0) blocks.push(block("当前关注", request.state.self));
   if (request.state.relationship.userDisplayName !== undefined || request.state.relationship.sharedProjects.length > 0) {
     blocks.push(block("关系信息", request.state.relationship));
+  }
+  if (request.conversationHistory.length > 0) {
+    blocks.push(block("最近对话", request.conversationHistory));
   }
   if (request.memories.length > 0) blocks.push(block("相关记忆", request.memories));
   if (request.evidence.length > 0) blocks.push(block("已验证证据", request.evidence));

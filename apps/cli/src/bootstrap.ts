@@ -55,6 +55,7 @@ export const createChatTurnRunner = async (model: ModelId): Promise<ChatTurnRunn
             relationship: { sharedProjects: ["Xiadie"] },
           },
           memories: [],
+          conversationHistory: [],
           turnInput: { id: `${id}:user:0`, content: userMessage },
           evidence: [],
           capabilities: { descriptions: [] },

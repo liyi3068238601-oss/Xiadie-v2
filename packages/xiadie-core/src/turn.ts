@@ -23,6 +23,12 @@ export interface UserMessage {
   readonly content: string;
 }
 
+export interface ConversationHistoryMessage {
+  readonly id: string;
+  readonly role: "user" | "assistant";
+  readonly content: string;
+}
+
 export interface SelfRequest {
   readonly turnId: TurnId;
   readonly persona: CompiledPersona;
@@ -31,6 +37,7 @@ export interface SelfRequest {
     readonly relationship: RelationshipState;
   };
   readonly memories: readonly MemoryRecord[];
+  readonly conversationHistory: readonly ConversationHistoryMessage[];
   readonly turnInput: UserMessage;
   readonly evidence: readonly VerifiedExecutionReport[];
   readonly capabilities: CapabilityAwareness;

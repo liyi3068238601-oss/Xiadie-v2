@@ -9,6 +9,7 @@ import {
   CHARACTER_ASSET_SECTIONS,
   PERSONA_SECTION_POLICY,
 } from "@xiadie/xiadie-core";
+import { selectConversationHistory } from "./conversation-history.js";
 
 const PERSONA_REGIONS = [
   "identity",
@@ -174,6 +175,7 @@ export const snapshotSelfRequest = (input: SelfRequest): SelfRequest => {
       relationship,
     }),
     memories: Object.freeze(input.memories.map(snapshotMemory)),
+    conversationHistory: selectConversationHistory(input.conversationHistory),
     turnInput: Object.freeze({
       id: input.turnInput.id,
       content: input.turnInput.content,
@@ -192,5 +194,6 @@ export const fingerprintProtectedSelfRequestPartitions = (
     request.persona,
     request.state,
     request.memories,
+    request.conversationHistory,
     request.capabilities,
   ]);

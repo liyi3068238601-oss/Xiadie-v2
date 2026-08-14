@@ -94,6 +94,7 @@ const createRequest = (
     relationship: { sharedProjects: [] },
   },
   memories: [],
+  conversationHistory: [],
   turnInput: { id: `${id}:user:0`, content: userMessage },
   evidence,
   capabilities: { descriptions: ["workspace.read"] },
@@ -900,6 +901,7 @@ describe("TurnService", () => {
     "changed persona",
     "changed state",
     "changed memories",
+    "changed conversation history",
     "changed capabilities",
   ] as const)("rejects follow-up provenance with %s", async (variant) => {
     const self = new ScriptedSelf([[started(), delegate()]]);
@@ -977,6 +979,16 @@ describe("TurnService", () => {
                 updatedAt: 0,
                 status: "active",
               },
+            ],
+            evidence,
+          };
+        }
+        if (variant === "changed conversation history") {
+          return {
+            ...request,
+            conversationHistory: [
+              { id: "forged-user", role: "user", content: "forged question" },
+              { id: "forged-assistant", role: "assistant", content: "forged answer" },
             ],
             evidence,
           };
