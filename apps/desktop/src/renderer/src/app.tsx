@@ -1,11 +1,11 @@
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useEffect, useState } from "react";
+import { DesktopShell } from "./components/xiadie/desktop-shell.js";
+import { useDesktopRuntime } from "./runtime/desktop-runtime.js";
+
 export function App() {
-  return (
-    <main className="desktop-shell">
-      <section className="desktop-card" aria-labelledby="desktop-title">
-        <p className="desktop-kicker">XIADIE</p>
-        <h1 id="desktop-title">Xiadie Desktop</h1>
-        <p>桌面端安全外壳已经就绪。</p>
-      </section>
-    </main>
-  );
+  const runtime = useDesktopRuntime();
+  const [configured, setConfigured] = useState(false);
+  useEffect(() => { void window.xiadieDesktop.getConnectionStatus().then((status) => setConfigured(status.configured)); }, []);
+  return <AssistantRuntimeProvider runtime={runtime}><DesktopShell connectionConfigured={configured} /></AssistantRuntimeProvider>;
 }

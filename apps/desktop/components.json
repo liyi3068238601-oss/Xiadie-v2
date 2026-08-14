@@ -1,0 +1,14 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": { "css": "src/renderer/src/styles/globals.css", "baseColor": "neutral", "cssVariables": true },
+  "aliases": {
+    "components": "./src/renderer/src/components",
+    "utils": "./src/renderer/src/lib/utils",
+    "ui": "./src/renderer/src/components/ui",
+    "lib": "./src/renderer/src/lib",
+    "hooks": "./src/renderer/src/hooks"
+  }
+}
