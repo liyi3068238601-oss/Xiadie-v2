@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  readonly xiadieDesktop: Readonly<{ version: "1" }>;
+import type { XiadieDesktopBridge } from "../../../shared/contracts.js";
+
+declare global {
+  interface Window {
+    readonly xiadieDesktop: XiadieDesktopBridge;
+  }
 }
+
+export {};

@@ -6,14 +6,18 @@ import {
 } from "@xiadie/application";
 import { createMastraTextAgent, MastraSelfRuntime } from "@xiadie/mastra-self-runtime";
 import { asTurnId, compileCharacter } from "@xiadie/xiadie-core";
-import { app, BrowserWindow, safeStorage } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage } from "electron";
 import { DesktopConversationRepository } from "./conversation-repository.js";
 import { DesktopDatabase } from "./database.js";
 import {
   DesktopChatService,
   createDesktopTurnRunnerFactory,
 } from "./desktop-chat-service.js";
-import { createDeepSeekModel } from "./deepseek-model.js";
+import {
+  createDeepSeekModel,
+  testDeepSeekConnection,
+} from "./deepseek-model.js";
+import { registerDesktopIpc } from "./ipc.js";
 import { ModelConnectionStore } from "./model-connection-store.js";
 import { SqliteVerifiedTurnStore } from "./verified-turn-store.js";
 import {
@@ -23,8 +27,9 @@ import {
 
 let desktopDatabase: DesktopDatabase | undefined;
 let desktopChatService: DesktopChatService | undefined;
+let trustedWebContentsId = -1;
 
-const initializeDesktopServices = async (): Promise<DesktopChatService> => {
+const initializeDesktopServices = async () => {
   const characterRoot = app.isPackaged
     ? join(process.resourcesPath, "character", "xiadie", "v1")
     : join(
@@ -85,7 +90,7 @@ const initializeDesktopServices = async (): Promise<DesktopChatService> => {
     createTurnId: () => asTurnId(randomUUID()),
   });
   service.initialize();
-  return service;
+  return Object.freeze({ service, conversations, connectionStore });
 };
 
 const createDesktopWindow = async (): Promise<BrowserWindow> => {
@@ -98,6 +103,7 @@ const createDesktopWindow = async (): Promise<BrowserWindow> => {
       : { developmentUrl, rendererFile },
   );
   const window = new BrowserWindow(createSecureWindowOptions(preloadPath));
+  trustedWebContentsId = window.webContents.id;
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, nextUrl) => {
@@ -117,7 +123,19 @@ const createDesktopWindow = async (): Promise<BrowserWindow> => {
 };
 
 void app.whenReady().then(async () => {
-  desktopChatService = await initializeDesktopServices();
+  const services = await initializeDesktopServices();
+  desktopChatService = services.service;
+  registerDesktopIpc(ipcMain, {
+    get trustedWebContentsId() {
+      return trustedWebContentsId;
+    },
+    repository: services.conversations,
+    chatService: services.service,
+    connectionStore: services.connectionStore,
+    createConversationId: randomUUID,
+    now: Date.now,
+    testConnection: (settings) => testDeepSeekConnection(settings),
+  });
   await createDesktopWindow();
 
   app.on("activate", () => {
