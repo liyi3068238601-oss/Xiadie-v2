@@ -21,6 +21,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: `${desktopRoot}/src/main/index.ts`,
+        external: ["@ast-grep/napi"],
       },
     },
   },

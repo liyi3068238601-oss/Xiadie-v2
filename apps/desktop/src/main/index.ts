@@ -1,9 +1,92 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { app, BrowserWindow } from "electron";
+import {
+  InMemoryCheckpointStore,
+  loadCharacterAssets,
+} from "@xiadie/application";
+import { createMastraTextAgent, MastraSelfRuntime } from "@xiadie/mastra-self-runtime";
+import { asTurnId, compileCharacter } from "@xiadie/xiadie-core";
+import { app, BrowserWindow, safeStorage } from "electron";
+import { DesktopConversationRepository } from "./conversation-repository.js";
+import { DesktopDatabase } from "./database.js";
+import {
+  DesktopChatService,
+  createDesktopTurnRunnerFactory,
+} from "./desktop-chat-service.js";
+import { createDeepSeekModel } from "./deepseek-model.js";
+import { ModelConnectionStore } from "./model-connection-store.js";
+import { SqliteVerifiedTurnStore } from "./verified-turn-store.js";
 import {
   createSecureWindowOptions,
   resolveRendererTarget,
 } from "./window-options.js";
+
+let desktopDatabase: DesktopDatabase | undefined;
+let desktopChatService: DesktopChatService | undefined;
+
+const initializeDesktopServices = async (): Promise<DesktopChatService> => {
+  const characterRoot = app.isPackaged
+    ? join(process.resourcesPath, "character", "xiadie", "v1")
+    : join(
+        app.getAppPath(),
+        "..",
+        "..",
+        "packages",
+        "xiadie-core",
+        "character",
+        "xiadie",
+        "v1",
+      );
+  const compiled = compileCharacter(await loadCharacterAssets(characterRoot));
+  const database = new DesktopDatabase(
+    join(app.getPath("userData"), "xiadie-desktop.sqlite"),
+  );
+  desktopDatabase = database;
+  const conversations = new DesktopConversationRepository(database);
+  const audit = new SqliteVerifiedTurnStore(database);
+  const checkpoints = new InMemoryCheckpointStore();
+  const connectionStore = new ModelConnectionStore({
+    settingsPath: join(app.getPath("userData"), "connection-settings.json"),
+    safeStorage,
+    environment: {
+      ...(process.env.DEEPSEEK_API_KEY === undefined
+        ? {}
+        : { apiKey: process.env.DEEPSEEK_API_KEY }),
+      ...(process.env.DEEPSEEK_BASE_URL === undefined
+        ? {}
+        : { baseUrl: process.env.DEEPSEEK_BASE_URL }),
+    },
+  });
+  const createTurnRunner = createDesktopTurnRunnerFactory({
+    persona: compiled.persona,
+    createSelf: (settings) =>
+      new MastraSelfRuntime({
+        agent: createMastraTextAgent(createDeepSeekModel(settings)),
+      }),
+    conversations: audit,
+    checkpoints,
+    build: {
+      coreVersion: "0.1.0",
+      characterVersion: compiled.metadata.characterVersion,
+      characterAssetHash: compiled.metadata.assetHash,
+      personaCompilerVersion: "1",
+      schema: {
+        conversation: 1,
+        memory: 1,
+        relationship: 1,
+        runtimeCheckpoint: 1,
+      },
+    },
+  });
+  const service = new DesktopChatService({
+    repository: conversations,
+    connectionStore,
+    createTurnRunner,
+    createTurnId: () => asTurnId(randomUUID()),
+  });
+  service.initialize();
+  return service;
+};
 
 const createDesktopWindow = async (): Promise<BrowserWindow> => {
   const preloadPath = join(__dirname, "../preload/index.mjs");
@@ -34,6 +117,7 @@ const createDesktopWindow = async (): Promise<BrowserWindow> => {
 };
 
 void app.whenReady().then(async () => {
+  desktopChatService = await initializeDesktopServices();
   await createDesktopWindow();
 
   app.on("activate", () => {
@@ -41,6 +125,12 @@ void app.whenReady().then(async () => {
       void createDesktopWindow();
     }
   });
+}).catch(() => app.quit());
+
+app.on("before-quit", () => {
+  desktopChatService = undefined;
+  desktopDatabase?.close();
+  desktopDatabase = undefined;
 });
 
 app.on("window-all-closed", () => {

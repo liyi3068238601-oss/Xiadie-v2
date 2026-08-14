@@ -46,3 +46,23 @@ export interface ModelConnectionStatusDto {
   readonly requiresExternalHostConfirmation: boolean;
   readonly lastProbeStatus: ConnectionProbeStatus;
 }
+
+interface TurnEventBase {
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly sequence: number;
+}
+
+export type TurnEventDto =
+  | (TurnEventBase & { readonly type: "started" })
+  | (TurnEventBase & { readonly type: "delta"; readonly delta: string })
+  | (TurnEventBase & { readonly type: "committed"; readonly message: MessageDto })
+  | (TurnEventBase & {
+      readonly type: "failed";
+      readonly errorCode: DesktopErrorCode;
+    });
+
+export type SendMessageResultDto = Readonly<
+  | { turnId: string; status: "committed"; message: MessageDto }
+  | { turnId: string; status: "failed"; errorCode: DesktopErrorCode }
+>;
