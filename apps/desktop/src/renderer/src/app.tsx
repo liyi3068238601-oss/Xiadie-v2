@@ -7,5 +7,5 @@ export function App() {
   const runtime = useDesktopRuntime();
   const [configured, setConfigured] = useState(false);
   useEffect(() => { void window.xiadieDesktop.getConnectionStatus().then((status) => setConfigured(status.configured)); }, []);
-  return <AssistantRuntimeProvider runtime={runtime}><DesktopShell connectionConfigured={configured} /></AssistantRuntimeProvider>;
+  return <AssistantRuntimeProvider runtime={runtime}><DesktopShell connectionConfigured={configured} onConnectionConfiguredChange={setConfigured} /></AssistantRuntimeProvider>;
 }
