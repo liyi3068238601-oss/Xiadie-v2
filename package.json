@@ -10,6 +10,9 @@
     "chat": "pnpm --filter @xiadie/cli chat",
     "persona:eval:live": "pnpm --filter @xiadie/cli persona:eval:live",
     "character:manifest": "node --experimental-strip-types scripts/generate-character-manifest.mjs",
+    "desktop:dev": "pnpm --filter @xiadie/desktop dev",
+    "desktop:build": "pnpm --filter @xiadie/desktop build",
+    "desktop:smoke": "pnpm --filter @xiadie/desktop smoke",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"

@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  color: #272332;
+  background: #f8f7fb;
+  font-family:
+    Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.desktop-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 20% 15%, rgb(224 214 243 / 65%), transparent 34%),
+    #f8f7fb;
+}
+
+.desktop-card {
+  width: min(32rem, 100%);
+  padding: 2.5rem;
+  border: 1px solid rgb(101 81 128 / 16%);
+  border-radius: 1.5rem;
+  background: rgb(255 255 255 / 78%);
+  box-shadow: 0 1.5rem 4rem rgb(72 55 94 / 12%);
+  backdrop-filter: blur(1.25rem);
+}
+
+.desktop-card h1 {
+  margin: 0.35rem 0 0.75rem;
+  font-size: clamp(2rem, 7vw, 3.2rem);
+  line-height: 1;
+}
+
+.desktop-card p {
+  margin: 0;
+  color: #6f687b;
+}
+
+.desktop-kicker {
+  letter-spacing: 0.32em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}

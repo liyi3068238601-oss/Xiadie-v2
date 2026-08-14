@@ -1,5 +1,6 @@
 .worktrees/
 .superpowers/
 node_modules/
+apps/desktop/out/
 *.tsbuildinfo
 

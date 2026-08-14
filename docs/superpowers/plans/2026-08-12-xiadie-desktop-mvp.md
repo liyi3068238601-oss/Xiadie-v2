@@ -6,7 +6,7 @@
 
 **Architecture:** Add a sandboxed `apps/desktop` Electron application whose Renderer communicates only through a typed preload bridge. Electron Main owns SQLite, encrypted connection settings, Character compilation, `TurnService`, and the Mastra runtime; Core gains an explicit committed-conversation-history partition so the desktop application is truly multi-turn without weakening the existing one-user-message trust boundary.
 
-**Tech Stack:** Node.js 24.16.0, pnpm 11.16.0, TypeScript 7.0.2, Vitest 4.1.10, Electron 43.2.0, electron-vite 5.0.0, React 19.2.8, Vite 8.1.5, assistant-ui 0.15.1, assistant-stream 0.3.30, Tailwind CSS 4.3.3, `@ai-sdk/openai-compatible` 3.0.16, Mastra 1.57.0, Electron `node:sqlite` and `safeStorage`.
+**Tech Stack:** Node.js 24.16.0, pnpm 11.16.0, TypeScript 7.0.2, Vitest 4.1.10, Electron 43.2.0, electron-vite 5.0.0, React 19.2.8, Vite 7.3.2, assistant-ui 0.15.1, assistant-stream 0.3.30, Tailwind CSS 4.3.3, `@ai-sdk/openai-compatible` 3.0.16, Mastra 1.57.0, Electron `node:sqlite` and `safeStorage`.
 
 ## Global Constraints
 
@@ -243,7 +243,7 @@ Create `apps/desktop/package.json` with exact versions and scripts `dev`, `build
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.16",
     "@assistant-ui/react": "0.15.1",
-    "@assistant-ui/react-markdown": "0.14.6",
+    "@assistant-ui/react-streamdown": "0.3.8",
     "assistant-stream": "0.3.30",
     "ai": "7.0.40",
     "class-variance-authority": "0.7.1",
@@ -262,13 +262,13 @@ Create `apps/desktop/package.json` with exact versions and scripts `dev`, `build
     "@testing-library/user-event": "14.6.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.4",
+    "@vitejs/plugin-react": "5.2.0",
     "electron": "43.2.0",
     "electron-vite": "5.0.0",
     "jsdom": "30.0.1",
     "tailwindcss": "4.3.3",
     "tw-animate-css": "1.4.0",
-    "vite": "8.1.5"
+    "vite": "7.3.2"
   }
 }
 ```
