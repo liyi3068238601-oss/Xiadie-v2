@@ -9,7 +9,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "test:renderer": "vitest --config vitest.renderer.config.ts run",
-    "smoke": "node ./scripts/electron-smoke.mjs"
+    "smoke": "pnpm build && node ./scripts/electron-smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.16",

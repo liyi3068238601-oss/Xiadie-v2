@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   InMemoryCheckpointStore,
   loadCharacterAssets,
@@ -20,6 +21,7 @@ import {
 import { registerDesktopIpc } from "./ipc.js";
 import { ModelConnectionStore } from "./model-connection-store.js";
 import { SqliteVerifiedTurnStore } from "./verified-turn-store.js";
+import { runDesktopSmokeMode } from "./smoke-mode.js";
 import {
   createSecureWindowOptions,
   resolveRendererTarget,
@@ -28,6 +30,7 @@ import {
 let desktopDatabase: DesktopDatabase | undefined;
 let desktopChatService: DesktopChatService | undefined;
 let trustedWebContentsId = -1;
+const mainDirectory = dirname(fileURLToPath(import.meta.url));
 
 const initializeDesktopServices = async () => {
   const characterRoot = app.isPackaged
@@ -93,9 +96,9 @@ const initializeDesktopServices = async () => {
   return Object.freeze({ service, conversations, connectionStore });
 };
 
-const createDesktopWindow = async (): Promise<BrowserWindow> => {
-  const preloadPath = join(__dirname, "../preload/index.mjs");
-  const rendererFile = join(__dirname, "../renderer/index.html");
+const createDesktopWindow = async (onReady?: () => void): Promise<BrowserWindow> => {
+  const preloadPath = join(mainDirectory, "../preload/index.mjs");
+  const rendererFile = join(mainDirectory, "../renderer/index.html");
   const developmentUrl = process.env.ELECTRON_RENDERER_URL;
   const target = resolveRendererTarget(
     developmentUrl === undefined
@@ -111,7 +114,10 @@ const createDesktopWindow = async (): Promise<BrowserWindow> => {
       event.preventDefault();
     }
   });
-  window.once("ready-to-show", () => window.show());
+  window.once("ready-to-show", () => {
+    window.show();
+    onReady?.();
+  });
 
   if (target.kind === "url") {
     await window.loadURL(target.value);
@@ -123,6 +129,12 @@ const createDesktopWindow = async (): Promise<BrowserWindow> => {
 };
 
 void app.whenReady().then(async () => {
+  if (await runDesktopSmokeMode({
+    value: process.env.XIADIE_DESKTOP_SMOKE,
+    createWindow: (onReady) => createDesktopWindow(onReady),
+    log: (marker) => console.log(marker),
+    quit: () => app.quit(),
+  })) return;
   const services = await initializeDesktopServices();
   desktopChatService = services.service;
   registerDesktopIpc(ipcMain, {
@@ -143,7 +155,14 @@ void app.whenReady().then(async () => {
       void createDesktopWindow();
     }
   });
-}).catch(() => app.quit());
+}).catch((error: unknown) => {
+  if (process.env.XIADIE_DESKTOP_SMOKE === "1") {
+    console.error("XIADIE_DESKTOP_SMOKE_ERROR", error instanceof Error ? error.message : "unknown");
+    app.exit(1);
+    return;
+  }
+  app.quit();
+});
 
 app.on("before-quit", () => {
   desktopChatService = undefined;

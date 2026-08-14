@@ -21,7 +21,10 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: `${desktopRoot}/src/main/index.ts`,
-        external: ["@ast-grep/napi"],
+        // `ws` loads these native accelerators through guarded optional requires.
+        // Keeping them external preserves that fallback instead of letting Vite
+        // turn a missing optional package into a fatal top-level bundle error.
+        external: ["@ast-grep/napi", "bufferutil", "utf-8-validate"],
       },
     },
   },
