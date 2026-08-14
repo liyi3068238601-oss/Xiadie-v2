@@ -9,7 +9,9 @@ export interface ConversationStore {
   commit(record: VerifiedTurnRecord): CommittedTurnRecord;
 }
 
-const canonicalPayload = (record: VerifiedTurnRecord): VerifiedTurnRecord => ({
+export const canonicalTurnPayload = (
+  record: VerifiedTurnRecord,
+): VerifiedTurnRecord => ({
   turnId: record.turnId,
   conversationId: record.conversationId,
   userMessageId: record.userMessageId,
@@ -35,7 +37,11 @@ const canonicalPayload = (record: VerifiedTurnRecord): VerifiedTurnRecord => ({
   },
 });
 
-const freezeCommitted = (
+export const serializeCanonicalTurnPayload = (
+  record: VerifiedTurnRecord,
+): string => JSON.stringify(canonicalTurnPayload(record));
+
+export const freezeCommittedTurnRecord = (
   record: CommittedTurnRecord,
 ): CommittedTurnRecord => {
   for (const execution of record.executions) {
@@ -58,7 +64,7 @@ export class InMemoryConversationStore implements ConversationStore {
   }
 
   commit(record: VerifiedTurnRecord): CommittedTurnRecord {
-    const payload = canonicalPayload(record);
+    const payload = canonicalTurnPayload(record);
     const serialized = JSON.stringify(payload);
     const existing = this.turns.get(record.turnId);
 
@@ -69,7 +75,7 @@ export class InMemoryConversationStore implements ConversationStore {
       return existing;
     }
 
-    const committed = freezeCommitted({
+    const committed = freezeCommittedTurnRecord({
       ...payload,
       committedAt: Date.now(),
       commitVersion: 1,
