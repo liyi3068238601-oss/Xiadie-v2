@@ -27,3 +27,22 @@ export interface MessageDto {
   readonly committedAt?: number;
   readonly errorCode?: DesktopErrorCode;
 }
+
+export type ConnectionProbeStatus =
+  | "untested"
+  | "ok"
+  | "unauthorized"
+  | "rate_limited"
+  | "unavailable"
+  | "timeout"
+  | "invalid_endpoint";
+
+export interface ModelConnectionStatusDto {
+  readonly model: "deepseek/deepseek-v4-flash";
+  readonly configured: boolean;
+  readonly keySource: "application" | "environment" | "none";
+  readonly baseUrlSource: "application" | "environment" | "default";
+  readonly baseUrl: string;
+  readonly requiresExternalHostConfirmation: boolean;
+  readonly lastProbeStatus: ConnectionProbeStatus;
+}

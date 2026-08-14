@@ -5,7 +5,9 @@ import type { MastraSelfInput } from "./prompt-renderer.js";
 export const buildMastraInstructions = (input: MastraSelfInput): readonly string[] =>
   Object.freeze([...input.runtimeProtocol, ...input.personaInstructions]);
 
-export const createMastraTextAgent = (model: `${string}/${string}`): MastraTextAgent => ({
+type MastraAgentModel = ConstructorParameters<typeof Agent>[0]["model"];
+
+export const createMastraTextAgent = (model: MastraAgentModel): MastraTextAgent => ({
   async stream(input) {
     const agent = new Agent({
       id: "xiadie-self",
